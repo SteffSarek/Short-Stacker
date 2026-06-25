@@ -5,18 +5,283 @@ import subprocess
 import threading
 import time
 import json
+import cv2
+
+from PIL import Image, ImageTk
 import customtkinter as ctk
+import tkinter as tk
 from tkinter import filedialog, messagebox
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
+
+class CropToolWindow(ctk.CTkToplevel):
+
+    def __init__(self, master, image_path, callback):
+        super().__init__(master)
+        self.title("Bildausschnitt (Crop) festlegen")
+        # Fenstergröße anpassen, falls nötig
+        self.geometry("1200x800")
+        self.transient(master)
+        self.grab_set()
+
+        self.callback = callback
+        self.crop_coords = None
+
+        # 1. Bild laden und Größe ermitteln
+        try:
+            self.original_image = Image.open(image_path)
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Konnte Bild nicht laden:\n{str(e)}")
+            self.destroy()
+            return
+
+        self.orig_w, self.orig_h = self.original_image.size
+
+        # 2. Skalierungsfaktor für die Anzeige berechnen (max 900x700 für die GUI)
+        max_disp_w, max_disp_h = 900, 700
+        scale = min(max_disp_w / self.orig_w, max_disp_h / self.orig_h)
+        
+        self.disp_w = int(self.orig_w * scale)
+        self.disp_h = int(self.orig_h * scale)
+        self.scale_factor = 1 / scale # Umrechnungsfaktor von Anzeige zu Original
+
+        # Bild für die Anzeige skalieren
+        self.disp_image = self.original_image.resize((self.disp_w, self.disp_h), Image.Resampling.LANCZOS)
+        self.tk_image = ImageTk.PhotoImage(self.disp_image)
+
+        # 3. Canvas (Zeichenfläche) erstellen
+        self.canvas = tk.Canvas(self, width=self.disp_w, height=self.disp_h, cursor="cross", bg="#1a1a1a", highlightthickness=0)
+        self.canvas.pack(pady=10)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+
+        # Maus-Events binden
+        self.canvas.bind("<ButtonPress-1>", self.on_press)
+        self.canvas.bind("<B1-Motion>", self.on_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_release)
+
+        self.rect_id = None
+        self.start_x = None
+        self.start_y = None
+
+        # 4. Buttons
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=10)
+        
+        ctk.CTkLabel(btn_frame, text="Tipp: Ziehe ein Rechteck über den Bereich, der behalten werden soll.").pack(side="left")
+        
+        self.btn_apply = ctk.CTkButton(btn_frame, text="Ausschnitt übernehmen", fg_color="#2b7b4a", hover_color="#1e5c36", state="disabled", command=self.apply_crop)
+        self.btn_apply.pack(side="right")
+
+    def on_press(self, event):
+        self.start_x = event.x
+        self.start_y = event.y
+        if self.rect_id:
+            self.canvas.delete(self.rect_id)
+        # Zeichnet ein rotes Rechteck
+        self.rect_id = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline="red", width=2)
+
+    def on_drag(self, event):
+        # Aktualisiert das Rechteck während des Ziehens
+        self.canvas.coords(self.rect_id, self.start_x, self.start_y, event.x, event.y)
+
+    def on_release(self, event):
+        # Berechne die echten Pixelkoordinaten auf dem Originalbild
+        end_x, end_y = event.x, event.y
+        
+        x1 = int(min(self.start_x, end_x) * self.scale_factor)
+        y1 = int(min(self.start_y, end_y) * self.scale_factor)
+        x2 = int(max(self.start_x, end_x) * self.scale_factor)
+        y2 = int(max(self.start_y, end_y) * self.scale_factor)
+        
+        # Sicherstellen, dass die Koordinaten im Bild bleiben
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(self.orig_w, x2), min(self.orig_h, y2)
+
+        self.crop_coords = (x1, y1, x2, y2)
+        self.btn_apply.configure(state="normal") # Button freischalten
+
+    def apply_crop(self):
+        if self.crop_coords:
+            self.callback(self.crop_coords) # Übergibt (x1, y1, x2, y2) an die Haupt-App
+            self.destroy()
+
+class TrackerToolWindow(ctk.CTkToplevel):
+    def __init__(self, master, first_image_path, last_image_path, callback):
+        super().__init__(master)
+        self.title("Asteroid markieren (Start & Ende)")
+        self.geometry("1200x850") # Breiter für die Lupe
+        self.transient(master)
+        self.grab_set()
+
+        self.callback = callback
+        self.first_image_path = first_image_path
+        self.last_image_path = last_image_path
+        
+        self.start_coords = None
+        self.end_coords = None
+        self.state = "START"
+        self.current_preview = "START"
+
+        # --- UI Setup ---
+        top_frame = ctk.CTkFrame(self, fg_color="transparent")
+        top_frame.pack(fill="x", pady=10)
+
+        self.lbl_info = ctk.CTkLabel(top_frame, text="Schritt 1: Klicke auf den Asteroiden im ERSTEN Bild.", font=ctk.CTkFont(weight="bold", size=16), text_color="#00ff00")
+        self.lbl_info.pack(side="left", padx=20)
+
+        self.btn_blink = ctk.CTkButton(top_frame, text="👁️ Blinken (Start/Ende vergleichen)", fg_color="#b87333", hover_color="#8c5827", command=self.toggle_blink)
+        self.btn_blink.pack(side="right", padx=20)
+
+        main_frame = ctk.CTkFrame(self, fg_color="transparent")
+        main_frame.pack(fill="both", expand=True, padx=10)
+
+        self.canvas = tk.Canvas(main_frame, bg="#1a1a1a", highlightthickness=0, cursor="crosshair")
+        self.canvas.pack(side="left", pady=5)
+        self.canvas.bind("<ButtonPress-1>", self.on_click)
+        self.canvas.bind("<Motion>", self.update_loupe)
+
+        # Rechter Bereich: Lupe
+        right_frame = ctk.CTkFrame(main_frame, width=280)
+        right_frame.pack(side="right", fill="y", padx=10)
+
+        ctk.CTkLabel(right_frame, text="300% Pixel-Lupe", font=ctk.CTkFont(weight="bold", size=14)).pack(pady=(10, 0))
+        ctk.CTkLabel(right_frame, text="Zeigt reine Rohpixel an", font=ctk.CTkFont(size=11), text_color="#888888").pack(pady=(0, 10))
+        
+        self.loupe_canvas = tk.Canvas(right_frame, width=240, height=240, bg="#000", highlightthickness=1, highlightbackground="#555")
+        self.loupe_canvas.pack(pady=5)
+        ctk.CTkLabel(right_frame, text="Fahre mit der Maus über das Bild,\num den Asteroiden genau zu treffen.", text_color="#aaaaaa").pack(pady=5)
+
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=10)
+
+        self.btn_reset = ctk.CTkButton(btn_frame, text="Zurücksetzen", command=self.reset)
+        self.btn_reset.pack(side="left")
+
+        self.btn_apply = ctk.CTkButton(btn_frame, text="Markierung übernehmen", fg_color="#2b7b4a", hover_color="#1e5c36", state="disabled", command=self.apply)
+        self.btn_apply.pack(side="right")
+
+        self.load_image(self.first_image_path)
+
+    def load_image(self, path):
+        self.original_image = Image.open(path).convert("RGB")
+        self.orig_w, self.orig_h = self.original_image.size
+
+        max_disp_w, max_disp_h = 880, 700
+        scale = min(max_disp_w / self.orig_w, max_disp_h / self.orig_h)
+        self.disp_w = int(self.orig_w * scale)
+        self.disp_h = int(self.orig_h * scale)
+        self.scale_factor = 1 / scale
+
+        self.disp_image = self.original_image.resize((self.disp_w, self.disp_h), Image.Resampling.LANCZOS)
+        self.tk_image = ImageTk.PhotoImage(self.disp_image)
+
+        self.canvas.config(width=self.disp_w, height=self.disp_h)
+        self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
+
+        # Markierungen neu zeichnen (wichtig fürs Blinken)
+        r = 8
+        if self.start_coords:
+            sx = self.start_coords[0] / self.scale_factor
+            sy = self.start_coords[1] / self.scale_factor
+            self.canvas.create_oval(sx-r, sy-r, sx+r, sy+r, outline="#00ff00", width=2)
+        if self.end_coords:
+            ex = self.end_coords[0] / self.scale_factor
+            ey = self.end_coords[1] / self.scale_factor
+            self.canvas.create_oval(ex-r, ey-r, ex+r, ey+r, outline="#ff0000", width=2)
+
+    def toggle_blink(self):
+        if self.current_preview == "START":
+            self.load_image(self.last_image_path)
+            self.current_preview = "END"
+            if self.state == "START":
+                self.lbl_info.configure(text="VORSCHAU: LETZTES Bild. (Klicke auf Blinken, um zurückzugehen)", text_color="#aaaaaa")
+        else:
+            self.load_image(self.first_image_path)
+            self.current_preview = "START"
+            if self.state == "START":
+                self.lbl_info.configure(text="Schritt 1: Klicke auf den Asteroiden im ERSTEN Bild.", text_color="#00ff00")
+
+    def update_loupe(self, event):
+        if not hasattr(self, 'original_image'): return
+
+        rx = int(event.x * self.scale_factor)
+        ry = int(event.y * self.scale_factor)
+        
+        box_size = 80 # 80x80 Pixel aus dem Originalbild
+        left = rx - box_size // 2
+        upper = ry - box_size // 2
+        right = rx + box_size // 2
+        lower = ry + box_size // 2
+        
+        # Ränder abfangen
+        if left < 0: left = 0; right = box_size
+        if upper < 0: upper = 0; lower = box_size
+        if right > self.orig_w: right = self.orig_w; left = self.orig_w - box_size
+        if lower > self.orig_h: lower = self.orig_h; upper = self.orig_h - box_size
+        
+        crop = self.original_image.crop((left, upper, right, lower))
+        # NEAREST erhält die harte Pixelstruktur ohne Weichzeichner
+        zoomed = crop.resize((240, 240), Image.Resampling.NEAREST) 
+        
+        self.loupe_tk_image = ImageTk.PhotoImage(zoomed)
+        self.loupe_canvas.delete("all")
+        self.loupe_canvas.create_image(0, 0, anchor="nw", image=self.loupe_tk_image)
+        
+        # Fadenkreuz in gelb
+        self.loupe_canvas.create_line(120, 100, 120, 140, fill="#ffff00", width=1)
+        self.loupe_canvas.create_line(100, 120, 140, 120, fill="#ffff00", width=1)
+
+    def on_click(self, event):
+        # Wenn im Vorschau-Modus (Blink) falsch geklickt wird:
+        if self.state == "START" and self.current_preview == "END":
+            self.load_image(self.first_image_path)
+            self.current_preview = "START"
+
+        real_x = int(event.x * self.scale_factor)
+        real_y = int(event.y * self.scale_factor)
+        r = 8 
+
+        if self.state == "START":
+            self.start_coords = (real_x, real_y)
+            self.canvas.create_oval(event.x-r, event.y-r, event.x+r, event.y+r, outline="#00ff00", width=2)
+            self.state = "END"
+            
+            self.lbl_info.configure(text="Lade letztes Bild...", text_color="#ffffff")
+            self.after(200, lambda: self.load_image(self.last_image_path))
+            self.after(200, lambda: self.set_end_state())
+
+        elif self.state == "END":
+            self.end_coords = (real_x, real_y)
+            self.canvas.create_oval(event.x-r, event.y-r, event.x+r, event.y+r, outline="#ff0000", width=2)
+            self.state = "DONE"
+            
+            self.lbl_info.configure(text="Fertig! Klicke auf 'Blinken' zum Prüfen oder auf 'Übernehmen'.", text_color="#ffffff")
+            self.btn_apply.configure(state="normal")
+            
+    def set_end_state(self):
+        self.current_preview = "END"
+        self.lbl_info.configure(text="Schritt 2: Klicke auf den Asteroiden im LETZTEN Bild.", text_color="#ff0000")
+
+    def reset(self):
+        self.state = "START"
+        self.current_preview = "START"
+        self.start_coords = None
+        self.end_coords = None
+        self.btn_apply.configure(state="disabled")
+        self.lbl_info.configure(text="Schritt 1: Klicke auf den Asteroiden im ERSTEN Bild.", text_color="#00ff00")
+        self.load_image(self.first_image_path)
+
+    def apply(self):
+        self.callback(self.start_coords, self.end_coords)
+        self.destroy()
 
 class ShortStackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
         self.title("Astro Short-Stacker (Siril & SetiAstro Automation) v1.6.1")
-        self.geometry("1050x680")
+        self.geometry("1400x680")
         try:
             if os.path.exists("shortstacker.ico"): 
                 self.wm_iconbitmap("shortstacker.ico")
@@ -45,6 +310,10 @@ class ShortStackerApp(ctk.CTk):
         self.load_settings()
 
         self._build_gui()
+        
+        # --- VARIABLEN ---
+        self.crop_coordinates = None
+        self.asteroid_coordinates = None  # <--- NEU
 
     # --- SETTINGS SPEICHERN/LADEN ---
     def load_settings(self):
@@ -81,7 +350,96 @@ class ShortStackerApp(ctk.CTk):
                 json.dump(data, f)
         except Exception:
             pass
+            
+    def open_crop_tool(self):
+        source_choice = self.video_source.get()
+        is_custom = "Beliebiger Ordner" in source_choice
+        is_unstacked = "Einzelbilder" in source_choice
+        out_dir = self.output_folder.get()
 
+        if not is_custom and not out_dir:
+            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
+            return
+
+        # --- ORDNER WEICHE (Wie beim Timelapse-Rendern) ---
+        if is_custom:
+            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Vorschau wählen")
+            if not frames_dir:
+                return  # Abgebrochen
+        elif is_unstacked:
+            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
+        else:
+            frames_dir = os.path.join(out_dir, "timelapse_frames")
+
+        if not os.path.exists(frames_dir):
+            messagebox.showinfo("Hinweis", f"Ordner nicht gefunden:\n{frames_dir}\nBitte führe zuerst den entsprechenden Vor-Schritt durch.")
+            return
+
+        # Suche nach einem Bild (JPG, PNG, TIF) für die Vorschau
+        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
+        images = []
+        for ext_pattern in valid_exts:
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
+
+        images = sorted(list(set(images)))
+        
+        if not images:
+            messagebox.showerror("Fehler", f"Keine Bilder für die Vorschau im Ordner gefunden:\n{frames_dir}")
+            return
+
+        self.last_custom_folder = frames_dir  # <--- NEU: Merke dir den Ordner für später
+        
+        first_image = images[0]
+        
+        # Öffnet das Crop-Fenster und übergibt die Methode zum Speichern der Koordinaten
+        CropToolWindow(self, first_image, self.save_crop_coords)
+
+    def save_crop_coords(self, coords):
+        self.crop_coordinates = coords
+        x1, y1, x2, y2 = coords
+        self.log(f"Crop-Rahmen gesetzt: X({x1} bis {x2}), Y({y1} bis {y2})")        
+
+    def open_tracker_tool(self):
+        source_choice = self.video_source.get()
+        is_custom = "Beliebiger Ordner" in source_choice
+        is_unstacked = "Einzelbilder" in source_choice
+        out_dir = self.output_folder.get()
+
+        if not is_custom and not out_dir:
+            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
+            return
+
+        # Ordner-Logik identisch zum Crop-Tool
+        if is_custom:
+            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Asteroiden-Tracking wählen")
+            if not frames_dir: return
+            self.last_custom_folder = frames_dir
+        elif is_unstacked:
+            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
+        else:
+            frames_dir = os.path.join(out_dir, "timelapse_frames")
+
+        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
+        images = []
+        for ext_pattern in valid_exts:
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
+
+        images = sorted(list(set(images)))
+        if not images:
+            messagebox.showerror("Fehler", "Keine Bilder gefunden.")
+            return
+
+        first_image = images[0]
+        last_image = images[-1] # Letztes Bild im Array!
+        
+        TrackerToolWindow(self, first_image, last_image, self.save_tracker_coords)
+
+    def save_tracker_coords(self, start_coords, end_coords):
+        self.asteroid_coordinates = (start_coords, end_coords)
+        self.log(f"Asteroid markiert: Start {start_coords} -> Ende {end_coords}")
+    
     def _build_gui(self):
         # 0. Top Bar (Titel & Einstellungen)
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -167,6 +525,14 @@ class ShortStackerApp(ctk.CTk):
 
         self.btn_timelapse = ctk.CTkButton(frame_timelapse, text="🎞️ Timelapse rendern", fg_color="#b87333", hover_color="#8c5827", font=ctk.CTkFont(weight="bold"), command=self.start_timelapse_thread)
         self.btn_timelapse.pack(side="right")
+        
+        # Button für das Crop-Tool
+        self.btn_crop = ctk.CTkButton(frame_timelapse, text="Bildausschnitt wählen", command=self.open_crop_tool)
+        self.btn_crop.pack(side="left", padx=(10, 0))
+
+        # NEU: Button für den Asteroiden-Tracker
+        self.btn_track = ctk.CTkButton(frame_timelapse, text="Asteroid markieren", fg_color="#3a5a78", hover_color="#2b435a", command=self.open_tracker_tool)
+        self.btn_track.pack(side="left", padx=(10, 0))
 
         # 5. FORTSCHRITTSBALKEN
         self.progress_bar = ctk.CTkProgressBar(self)
@@ -263,6 +629,23 @@ class ShortStackerApp(ctk.CTk):
         self.btn_stop.configure(state="disabled", text="Stoppe nach aktuellem Batch...")
         self.log("\n[!] Abbruch angefordert... Bitte warten, bis Siril den aktuellen Batch beendet hat.")
 
+    def _get_fits_timestamp(self, filepath):
+        """Liest schnell und ohne Zusatzbibliotheken den DATE-OBS Header aus einer FITS-Datei."""
+        try:
+            with open(filepath, 'rb') as f:
+                # FITS-Header sind in 2880-Byte-Blöcken organisiert. 4 Blöcke reichen völlig, um DATE-OBS zu finden.
+                header_data = f.read(2880 * 4).decode('ascii', errors='ignore')
+                for i in range(0, len(header_data), 80):
+                    card = header_data[i:i+80]
+                    if card.startswith('DATE-OBS'):
+                        # Extrahiert den reinen Zeitstempel, z.B. '2026-06-25T23:15:30.123'
+                        return card.split('=')[1].split('/')[0].strip(" '")
+        except Exception:
+            pass
+        
+        # Fallback: Sollte kein DATE-OBS gefunden werden, nutze das letzte Änderungsdatum der Datei
+        return os.path.getmtime(filepath)
+    
     # --- STACKING LOGIK ---
     def start_stacking_thread(self):
         in_dir = self.input_folder.get()
@@ -300,7 +683,11 @@ class ShortStackerApp(ctk.CTk):
         try:
             search1 = os.path.join(in_dir, "*.fit")
             search2 = os.path.join(in_dir, "*.fits")
-            dateien = sorted(glob.glob(search1) + glob.glob(search2))
+            # 1. Unsortierte Liste aller FITS holen
+            dateien = glob.glob(search1) + glob.glob(search2)
+            
+            # 2. NEU: Chronologisch nach dem echten Aufnahmezeitpunkt (FITS-Header) sortieren!
+            dateien.sort(key=self._get_fits_timestamp)
             
             total_files = len(dateien)
             if total_files == 0:
@@ -545,9 +932,13 @@ class ShortStackerApp(ctk.CTk):
             
         custom_folder = ""
         if is_custom:
-            custom_folder = filedialog.askdirectory(title="Beliebigen Ordner mit JPG/PNG/TIF Bildern wählen")
-            if not custom_folder:
-                return 
+            # NEU: Prüfen, ob wir im Crop-Tool gerade schon einen Ordner gewählt haben
+            if hasattr(self, 'last_custom_folder') and self.last_custom_folder and (self.crop_coordinates or self.asteroid_coordinates):
+                custom_folder = self.last_custom_folder
+            else:
+                custom_folder = filedialog.askdirectory(title="Beliebigen Ordner mit JPG/PNG/TIF Bildern wählen")
+                if not custom_folder:
+                    return
             
         self.btn_timelapse.configure(state="disabled", text="Arbeite...")
         self.progress_bar.set(0.0)
@@ -701,12 +1092,65 @@ class ShortStackerApp(ctk.CTk):
             
             first_ext = os.path.splitext(image_files[0])[1]
             
+            N_frames = len(image_files)
+
             for idx, file_path in enumerate(image_files):
                 dst = os.path.join(temp_ffmpeg_dir, f"frame_{idx+1:05d}{first_ext}")
-                try:
-                    os.link(file_path, dst) 
-                except OSError:
-                    shutil.copy2(file_path, dst) 
+                
+                img = cv2.imread(file_path)
+                
+                # --- 1. BESCHNITT (CROP) ANWENDEN ---
+                if self.crop_coordinates:
+                    x1, y1, x2, y2 = self.crop_coordinates
+                    
+                    # Zwingend für FFmpeg: Gerade Zahlen!
+                    w = x2 - x1
+                    h = y2 - y1
+                    if w % 2 != 0: x2 -= 1
+                    if h % 2 != 0: y2 -= 1
+                    
+                    img_cropped = img[y1:y2, x1:x2]
+                else:
+                    img_cropped = img  # Fallback, wenn kein Beschnitt gewählt wurde
+                    x1, y1 = 0, 0      # Wichtig für die spätere Pfeil-Berechnung
+
+                # --- 2. ASTEROIDEN-MARKIERUNG ZEICHNEN ---
+                if hasattr(self, 'asteroid_coordinates') and self.asteroid_coordinates:
+                    (start_x_orig, start_y_orig), (end_x_orig, end_y_orig) = self.asteroid_coordinates
+                    
+                    # Wir verschieben die geklickten Koordinaten um den Crop-Rahmen
+                    ast_x_start = start_x_orig - x1
+                    ast_y_start = start_y_orig - y1
+                    ast_x_end = end_x_orig - x1
+                    ast_y_end = end_y_orig - y1
+                    
+                    if N_frames > 1:
+                        # Position für den aktuellen Frame linear interpolieren
+                        cur_x = int(ast_x_start + (idx / (N_frames - 1)) * (ast_x_end - ast_x_start))
+                        cur_y = int(ast_y_start + (idx / (N_frames - 1)) * (ast_y_end - ast_y_start))
+                        
+                        # --- DEZENTERE PFEIL-GEOMETRIE ---
+                        # Der Pfeil beginnt nur noch 35 Pixel entfernt (statt 60)
+                        arrow_start = (cur_x - 40, cur_y - 40)
+                        # ...und endet 10 Pixel vor dem Asteroiden
+                        arrow_end = (cur_x - 6, cur_y - 6)
+                        
+                        # Pfeil zeichnen:
+                        # (0, 0, 180) -> Ein etwas weicheres, dunkleres Rot (BGR-Format)
+                        # thickness=1 -> Feine, 1 Pixel dünne Linie
+                        # tipLength=0.15 -> Deutlich kleinere Pfeilspitze
+                        cv2.arrowedLine(img_cropped, arrow_start, arrow_end, (0, 0, 200), 2, cv2.LINE_AA, 0, 0.25)
+
+                # --- 3. BILD SPEICHERN ODER VERLINKEN ---
+                # Wenn wir gecroppt ODER gemalt haben, MUSS ein neues Bild geschrieben werden
+                if self.crop_coordinates or (hasattr(self, 'asteroid_coordinates') and self.asteroid_coordinates):
+                    cv2.imwrite(dst, img_cropped)
+                else:
+                    # Wenn weder gecroppt noch markiert wurde, greift der schnelle Hardlink
+                    try:
+                        os.link(file_path, dst) 
+                    except OSError:
+                        shutil.copy2(file_path, dst)
                     
             # --- 4. FFMPEG RENDERING ---
             self.log("Versuche Video mit FFmpeg zu rendern...")
