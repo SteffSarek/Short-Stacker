@@ -180,3 +180,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 short Stacker/shortstacker_settings.json
+short Stacker/short_stacker_gui - Kopie.py

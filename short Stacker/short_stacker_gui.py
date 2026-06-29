@@ -280,7 +280,7 @@ class ShortStackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Astro Short-Stacker (Siril & SetiAstro Automation) v1.6.1")
+        self.title("Astro Short-Stacker (Siril & SetiAstro Automation) v1.7.0")
         self.geometry("1400x680")
         try:
             if os.path.exists("shortstacker.ico"): 
@@ -441,109 +441,401 @@ class ShortStackerApp(ctk.CTk):
         self.log(f"Asteroid markiert: Start {start_coords} -> Ende {end_coords}")
     
     def _build_gui(self):
-        # 0. Top Bar (Titel & Einstellungen)
+        # --- TOP BAR ---
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.grid(row=0, column=0, padx=20, pady=(10, 0), sticky="ew")
-        ctk.CTkLabel(top_frame, text="Astro Short-Stacker v1.6.1", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
+        ctk.CTkLabel(top_frame, text="Astro Short-Stacker v1.7.0", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
         ctk.CTkButton(top_frame, text="⚙️ Einstellungen", width=120, fg_color="#454545", hover_color="#2b2b2b", command=self.open_settings).pack(side="right")
 
-        # 1. Input Ordner
-        frame_in = ctk.CTkFrame(self)
-        frame_in.grid(row=1, column=0, padx=20, pady=(15, 10), sticky="ew")
-        ctk.CTkLabel(frame_in, text="1. Input (Originale 10s FITS):", width=180, anchor="w").pack(side="left", padx=10, pady=10)
-        ctk.CTkEntry(frame_in, textvariable=self.input_folder, state="readonly", width=300).pack(side="left", padx=10, fill="x", expand=True)
-        ctk.CTkButton(frame_in, text="Ordner wählen", command=self.select_input, width=120).pack(side="right", padx=10)
-
-        # 2. Output Ordner
-        frame_out = ctk.CTkFrame(self)
-        frame_out.grid(row=2, column=0, padx=20, pady=10, sticky="ew")
-        ctk.CTkLabel(frame_out, text="2. Output (Fertige Stacks):", width=180, anchor="w").pack(side="left", padx=10, pady=10)
-        ctk.CTkEntry(frame_out, textvariable=self.output_folder, state="readonly", width=300).pack(side="left", padx=10, fill="x", expand=True)
-        ctk.CTkButton(frame_out, text="Ordner wählen", command=self.select_output, width=120).pack(side="right", padx=10)
-
-        # 3. Optionen & Buttons (STACKING)
-        frame_run = ctk.CTkFrame(self, fg_color="transparent")
-        frame_run.grid(row=3, column=0, padx=20, pady=10, sticky="ew")
-        ctk.CTkLabel(frame_run, text="Bilder pro Batch:").pack(side="left", padx=(0, 10))
-        ctk.CTkEntry(frame_run, textvariable=self.batch_size, width=50, justify="center").pack(side="left")
+        # --- GLOBALE PFADE ---
+        frame_paths = ctk.CTkFrame(self)
+        frame_paths.grid(row=1, column=0, padx=20, pady=(15, 10), sticky="ew")
         
-        self.stack_mode = ctk.StringVar(value="Farbe (Debayer) für Timelapse")
-        self.opt_mode = ctk.CTkOptionMenu(
-            frame_run, 
-            variable=self.stack_mode, 
-            values=[
-                "Farbe (Debayer) für Timelapse", 
-                "Original Mono (RAW)", 
-                "Nur Grünkanal (Photometrie)",
-                "➡️ Nur registrieren (Für Photometrie / Global)",
-                "➡️ Nur Konvertieren (Input direkt zu JPG/PNG)"
-            ],
-            width=280
-        )
-        self.opt_mode.pack(side="left", padx=20)
+        self.lbl_input = ctk.CTkLabel(frame_paths, text="1. Input (Originale 10s FITS):", width=220, anchor="w")
+        self.lbl_input.grid(row=0, column=0, padx=10, pady=(10, 5))
+        ctk.CTkEntry(frame_paths, textvariable=self.input_folder, state="readonly", width=400).grid(row=0, column=1, padx=10, pady=(10, 5), sticky="ew")
+        self.btn_input = ctk.CTkButton(frame_paths, text="Ordner wählen", command=self.select_input, width=120)
+        self.btn_input.grid(row=0, column=2, padx=10, pady=(10, 5))
         
-        self.btn_stop = ctk.CTkButton(frame_run, text="⏹ Stop", fg_color="#9e3e3e", hover_color="#7a2f2f", font=ctk.CTkFont(weight="bold"), state="disabled", command=self.request_stop)
-        self.btn_stop.pack(side="right", padx=(10, 0))
+        self.lbl_output = ctk.CTkLabel(frame_paths, text="2. Output (Fertige Dateien):", width=220, anchor="w")
+        self.lbl_output.grid(row=1, column=0, padx=10, pady=(0, 10))
+        ctk.CTkEntry(frame_paths, textvariable=self.output_folder, state="readonly", width=400).grid(row=1, column=1, padx=10, pady=(0, 10), sticky="ew")
+        self.btn_output = ctk.CTkButton(frame_paths, text="Ordner wählen", command=self.select_output, width=120)
+        self.btn_output.grid(row=1, column=2, padx=10, pady=(0, 10))
+        frame_paths.grid_columnconfigure(1, weight=1)
 
-        self.btn_start = ctk.CTkButton(frame_run, text="▶ Starten", fg_color="#2b7b4a", hover_color="#1e5c36", font=ctk.CTkFont(weight="bold"), command=self.start_stacking_thread)
-        self.btn_start.pack(side="right")
-        
-        # 4. Timelapse Bereich
-        frame_timelapse = ctk.CTkFrame(self, fg_color="transparent")
-        frame_timelapse.grid(row=4, column=0, padx=20, pady=(10, 10), sticky="ew")
-        ctk.CTkLabel(frame_timelapse, text="Video-Export:").pack(side="left", padx=(0, 10))
-        
-        self.video_source = ctk.StringVar(value="Quelle: FITS Stacks")
-        self.opt_vid_source = ctk.CTkOptionMenu(
-            frame_timelapse, 
-            variable=self.video_source, 
-            values=["Quelle: FITS Stacks", "Quelle: Einzelbilder (Unstacked)", "Quelle: Beliebiger Ordner (StarStax etc.)"],
-            width=230
-        )
-        self.opt_vid_source.pack(side="left", padx=(0, 10))
-
+        # Globale Variablen für Backend-Kompatibilität
+        self.stack_mode = ctk.StringVar(value="")
         self.export_format = ctk.StringVar(value="JPEG (Schnell & Klein)")
-        self.opt_format = ctk.CTkOptionMenu(
-            frame_timelapse, 
-            variable=self.export_format, 
-            values=["JPEG (Schnell & Klein)", "PNG (Verlustfrei & Groß)"],
-            width=180
-        )
-        self.opt_format.pack(side="left", padx=(0, 10))
+        self.video_source = ctk.StringVar(value="Quelle: FITS Stacks")
 
-        # Denoise Checkboxen (angepasst)
-        mid_denoise = ctk.CTkFrame(frame_timelapse, fg_color="transparent")
-        mid_denoise.pack(side="left", padx=(0, 10))
+        # --- WORKFLOW TABS ---
+        self.tabview = ctk.CTkTabview(self, height=240, command=self.update_path_states)
+        self.tabview.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
         
-        # Haupt-Haken löst _toggle_denoise_lite aus
-        self.chk_denoise = ctk.CTkCheckBox(mid_denoise, text="KI Denoise (SetiAstro) Rechenintensiv!", variable=self.use_denoise, command=self._toggle_denoise_lite)
-        self.chk_denoise.pack(side="top", anchor="w")
+        tab_stacking = self.tabview.add("Schritt 1: FITS Aufbereitung")
+        tab_video = self.tabview.add("Schritt 2: Video Builder & Effekte")
+        tab_tools = self.tabview.add("Extras: Tools & Konverter")
+
+        self._build_tab_stacking(tab_stacking)
+        self._build_tab_video(tab_video)
+        self._build_tab_tools(tab_tools)
+
+        # --- FORTSCHRITT & LOG ---
+        progress_frame = ctk.CTkFrame(self, fg_color="transparent")
+        progress_frame.grid(row=5, column=0, padx=20, pady=(10, 0), sticky="ew")
         
-        # Lite-Haken ist eingerückt und standardmäßig deaktiviert
-        self.chk_lite = ctk.CTkCheckBox(mid_denoise, text="Denoise Lite Mode", variable=self.use_denoise_lite, state="disabled")
-        self.chk_lite.pack(side="top", anchor="w", pady=(5,0), padx=(20, 0))
-
-        self.btn_timelapse = ctk.CTkButton(frame_timelapse, text="🎞️ Timelapse rendern", fg_color="#b87333", hover_color="#8c5827", font=ctk.CTkFont(weight="bold"), command=self.start_timelapse_thread)
-        self.btn_timelapse.pack(side="right")
+        self.btn_stop = ctk.CTkButton(progress_frame, text="⏹ Stop / Abbruch", fg_color="#9e3e3e", hover_color="#7a2f2f", font=ctk.CTkFont(weight="bold"), state="disabled", command=self.request_stop, width=150)
+        self.btn_stop.pack(side="right", padx=(10, 0))
         
-        # Button für das Crop-Tool
-        self.btn_crop = ctk.CTkButton(frame_timelapse, text="Bildausschnitt wählen", command=self.open_crop_tool)
-        self.btn_crop.pack(side="left", padx=(10, 0))
-
-        # NEU: Button für den Asteroiden-Tracker
-        self.btn_track = ctk.CTkButton(frame_timelapse, text="Asteroid markieren", fg_color="#3a5a78", hover_color="#2b435a", command=self.open_tracker_tool)
-        self.btn_track.pack(side="left", padx=(10, 0))
-
-        # 5. FORTSCHRITTSBALKEN
-        self.progress_bar = ctk.CTkProgressBar(self)
-        self.progress_bar.grid(row=5, column=0, padx=20, pady=(10, 0), sticky="ew")
+        self.progress_bar = ctk.CTkProgressBar(progress_frame)
+        self.progress_bar.pack(side="left", fill="x", expand=True, pady=5)
         self.progress_bar.set(0.0) 
 
-        # 6. Log Box
-        ctk.CTkLabel(self, text="Log-Ausgabe:", anchor="w").grid(row=6, column=0, padx=20, pady=(10, 0), sticky="ew")
+        ctk.CTkLabel(self, text="Log-Ausgabe:", anchor="w", text_color="gray").grid(row=6, column=0, padx=20, pady=(5, 0), sticky="ew")
         self.log_box = ctk.CTkTextbox(self)
         self.log_box.grid(row=7, column=0, padx=20, pady=(0, 20), sticky="nsew")
-        self.log_box.insert("0.0", "Bereit. v1.6.1 mit SetiAstro-Support. Bitte Ordner auswählen...\n")
+        self.log_box.insert("0.0", "Bereit. v1.7.0\n")
+        
+        self.update_path_states()
+        
+    def update_path_states(self, *args):
+        """Prüft, in welchem Tab wir sind und graut ungenutzte Ordner-Pfade aus."""
+        current_tab = self.tabview.get()
+
+        if "FITS Aufbereitung" in current_tab or "Tools" in current_tab:
+            # Tab 1 und 3 brauchen zwingend Input UND Output
+            self._set_path_state("input", True)
+            self._set_path_state("output", True)
+            
+        elif "Video Builder" in current_tab:
+            src = self.video_source.get()
+            if "Beliebiger" in src:
+                # Braucht weder Input noch Output (Dialog fragt später extra)
+                self._set_path_state("input", False)
+                self._set_path_state("output", False)
+            else:
+                # Braucht nur den Output-Ordner (um dort die fertigen Stacks zu finden)
+                self._set_path_state("input", False)
+                self._set_path_state("output", True)
+
+    def _set_path_state(self, path_type, is_active):
+        state = "normal" if is_active else "disabled"
+        text_color = ["gray10", "#DCE4EE"] if is_active else "gray50"
+
+        if path_type == "input":
+            self.btn_input.configure(state=state)
+            self.lbl_input.configure(text_color=text_color)
+            if is_active:
+                self.lbl_input.configure(text="1. Input (Originale 10s FITS):")
+            else:
+                self.lbl_input.configure(text="1. Input (Wird hier ignoriert)")
+
+        elif path_type == "output":
+            self.btn_output.configure(state=state)
+            self.lbl_output.configure(text_color=text_color)
+            if is_active:
+                self.lbl_output.configure(text="2. Output (Fertige Dateien):")
+            else:
+                self.lbl_output.configure(text="2. Output (Wird hier ignoriert)")
+
+    # --- TAB 1: STACKING & REGISTRIERUNG ---
+    def _build_tab_stacking(self, parent):
+        parent.grid_columnconfigure((0, 1), weight=1)
+        
+        # Stacking (DeepSky)
+        frame_stack = ctk.CTkFrame(parent)
+        frame_stack.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_stack, text="Option A: Short-Stacking", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_stack, text="Reduziert Rauschen durch Batch-Stacking.\nIdeal für Deep-Sky Timelapse & Photometrie.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,10))
+        
+        b_frame = ctk.CTkFrame(frame_stack, fg_color="transparent")
+        b_frame.pack(pady=5)
+        ctk.CTkLabel(b_frame, text="Bilder pro Stack:").pack(side="left", padx=5)
+        ctk.CTkEntry(b_frame, textvariable=self.batch_size, width=50, justify="center").pack(side="left")
+        
+        btn_frame1 = ctk.CTkFrame(frame_stack, fg_color="transparent")
+        btn_frame1.pack(pady=10)
+        
+        self.btn_stack_color = ctk.CTkButton(btn_frame1, text="▶ Farbe (Debayer)", width=130, fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Farbe (Debayer) für Timelapse"))
+        self.btn_stack_color.pack(side="left", padx=5)
+        
+        self.btn_stack_green = ctk.CTkButton(btn_frame1, text="▶ Nur Grünkanal", width=130, fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Nur Grünkanal (Photometrie)"))
+        self.btn_stack_green.pack(side="left", padx=5)
+
+        # Global Registrieren (Asteroiden)
+        frame_reg = ctk.CTkFrame(parent)
+        frame_reg.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_reg, text="Option B: Globale Registrierung", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_reg, text="Richtet alle Bilder an einem Referenzbild aus.\nZwingend erforderlich für Asteroiden-Timelapses!", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,15))
+        
+        self.btn_stack_reg = ctk.CTkButton(frame_reg, text="▶ Nur Registrieren starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur registrieren (Für Photometrie / Global)"))
+        self.btn_stack_reg.pack(pady=20)
+
+    # --- TAB 2: VIDEO BUILDER & EFFEKTE ---
+    def _build_tab_video(self, parent):
+        parent.grid_columnconfigure((0, 1, 2), weight=1)
+        
+        # Spalte 1: Quelle & Format
+        frame_src = ctk.CTkFrame(parent)
+        frame_src.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
+        ctk.CTkLabel(frame_src, text="1. Quelle & Format", font=ctk.CTkFont(weight="bold")).pack(pady=10)
+        
+        ctk.CTkOptionMenu(frame_src, variable=self.video_source, values=[
+            "Quelle: FITS Stacks", 
+            "Quelle: Einzelbilder (Unstacked)", 
+            "Quelle: Beliebiger Ordner (StarStax etc.)"
+        ], width=200, command=self.update_path_states).pack(pady=(5, 10))
+        
+        ctk.CTkOptionMenu(frame_src, variable=self.export_format, values=[
+            "JPEG (Schnell & Klein)", 
+            "PNG (Verlustfrei & Groß)",
+            "TIFF (16-bit unkomprimiert)"
+        ], width=180).pack(pady=5)
+
+        # Spalte 2: Effekte & Tools (Asteroiden & Denoise)
+        frame_fx = ctk.CTkFrame(parent)
+        frame_fx.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
+        ctk.CTkLabel(frame_fx, text="2. Effekte & Tools", font=ctk.CTkFont(weight="bold")).pack(pady=10)
+        
+        btn_fx = ctk.CTkFrame(frame_fx, fg_color="transparent")
+        btn_fx.pack(pady=5)
+        ctk.CTkButton(btn_fx, text="✂️ Bildausschnitt", width=100, command=self.open_crop_tool).pack(side="left", padx=2)
+        ctk.CTkButton(btn_fx, text="☄️ Asteroid markieren", width=120, command=self.open_tracker_tool).pack(side="left", padx=2)
+        
+        self.chk_denoise = ctk.CTkCheckBox(frame_fx, text="KI Denoise (SetiAstro)", variable=self.use_denoise, command=self._toggle_denoise_lite)
+        self.chk_denoise.pack(pady=(15, 2))
+        self.chk_lite = ctk.CTkCheckBox(frame_fx, text="Denoise Lite Mode", variable=self.use_denoise_lite, state="disabled")
+        self.chk_lite.pack(pady=2)
+
+        # Spalte 3: Rendern
+        frame_render = ctk.CTkFrame(parent)
+        frame_render.grid(row=0, column=2, padx=5, pady=5, sticky="nsew")
+        ctk.CTkLabel(frame_render, text="3. Fertigstellen", font=ctk.CTkFont(weight="bold")).pack(pady=(10, 15))
+        ctk.CTkLabel(frame_render, text="Wendet ggf. Siril-Stretch an,\n entrauscht und rendert das MP4.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(0, 15))
+        
+        self.btn_timelapse = ctk.CTkButton(frame_render, text="🎞️ Timelapse rendern", fg_color="#b87333", hover_color="#8c5827", font=ctk.CTkFont(weight="bold"), command=self.start_timelapse_thread)
+        self.btn_timelapse.pack(pady=5)
+
+    # --- TAB 3: TOOLS ---
+    def _build_tab_tools(self, parent):
+        parent.grid_columnconfigure(0, weight=1)
+        
+        frame_conv = ctk.CTkFrame(parent)
+        frame_conv.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_conv, text="FITS direkt zu JPG/PNG/TIF konvertieren", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_conv, text="Kein Stacking. Wandelt alle Input-FITS direkt in das in Tab 2 gewählte Format um.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,15))
+        
+        self.btn_tool_conv = ctk.CTkButton(frame_conv, text="▶ Direkt-Konvertierung starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur Konvertieren (Input direkt zu JPG/PNG)"))
+        self.btn_tool_conv.pack(pady=15)
+
+    # --- BRÜCKEN-METHODEN ---
+    def _trigger_stacking(self, mode_string):
+        self.stack_mode.set(mode_string)
+        self.start_stacking_thread()
+
+    def _toggle_denoise_lite(self):
+        if self.use_denoise.get():
+            self.chk_lite.configure(state="normal")
+        else:
+            self.chk_lite.configure(state="disabled")
+
+    # =================================================================
+    # CROP & TRACKING LOGIK
+    # =================================================================
+    def open_crop_tool(self):
+        source_choice = self.video_source.get()
+        is_custom = "Beliebiger Ordner" in source_choice
+        is_unstacked = "Einzelbilder" in source_choice
+        out_dir = self.output_folder.get()
+
+        if not is_custom and not out_dir:
+            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
+            return
+
+        if is_custom:
+            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Vorschau wählen")
+            if not frames_dir: return  
+        elif is_unstacked:
+            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
+        else:
+            frames_dir = os.path.join(out_dir, "timelapse_frames")
+
+        if not os.path.exists(frames_dir):
+            messagebox.showinfo("Hinweis", f"Ordner nicht gefunden:\n{frames_dir}\nBitte führe zuerst die FITS-Aufbereitung (oder Konvertierung) durch, damit Bilder zum Bearbeiten existieren!")
+            return
+
+        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
+        images = []
+        for ext_pattern in valid_exts:
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
+
+        images = sorted(list(set(images)))
+        
+        if not images:
+            messagebox.showerror("Fehler", f"Keine Bilder für die Vorschau im Ordner gefunden:\n{frames_dir}")
+            return
+
+        self.last_custom_folder = frames_dir  
+        first_image = images[0]
+        CropToolWindow(self, first_image, self.save_crop_coords)
+
+    def save_crop_coords(self, coords):
+        self.crop_coordinates = coords
+        x1, y1, x2, y2 = coords
+        self.log(f"-> Crop-Rahmen gesetzt: X({x1} bis {x2}), Y({y1} bis {y2})")        
+
+    def open_tracker_tool(self):
+        source_choice = self.video_source.get()
+        is_custom = "Beliebiger Ordner" in source_choice
+        is_unstacked = "Einzelbilder" in source_choice
+        out_dir = self.output_folder.get()
+
+        if not is_custom and not out_dir:
+            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
+            return
+
+        if is_custom:
+            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Asteroiden-Tracking wählen")
+            if not frames_dir: return
+            self.last_custom_folder = frames_dir
+        elif is_unstacked:
+            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
+        else:
+            frames_dir = os.path.join(out_dir, "timelapse_frames")
+
+        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
+        images = []
+        for ext_pattern in valid_exts:
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
+            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
+
+        images = sorted(list(set(images)))
+        if not images:
+            messagebox.showerror("Fehler", "Keine Bilder gefunden. Bitte zuerst Bilder erzeugen lassen!")
+            return
+
+        first_image = images[0]
+        last_image = images[-1] 
+        TrackerToolWindow(self, first_image, last_image, self.save_tracker_coords)
+
+    def save_tracker_coords(self, start_coords, end_coords):
+        self.asteroid_coordinates = (start_coords, end_coords)
+        self.log(f"-> Asteroid markiert: Start {start_coords} -> Ende {end_coords}")
+
+
+    # --- TAB 1: TIMELAPSE ---
+    def _build_tab_timelapse(self, parent):
+        parent.grid_columnconfigure((0, 1), weight=1)
+        
+        # Links: Stacking
+        frame_stack = ctk.CTkFrame(parent)
+        frame_stack.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_stack, text="Schritt 1: Short-Stacking", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_stack, text="Reduziert Rauschen durch Stacking von x Bildern.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(0,10))
+        
+        b_frame = ctk.CTkFrame(frame_stack, fg_color="transparent")
+        b_frame.pack(pady=5)
+        ctk.CTkLabel(b_frame, text="Bilder pro Stack:").pack(side="left", padx=5)
+        ctk.CTkEntry(b_frame, textvariable=self.batch_size, width=60, justify="center").pack(side="left")
+        
+        self.btn_start_tl_stack = ctk.CTkButton(frame_stack, text="▶ Stacking starten (Farbe/Debayer)", fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Farbe (Debayer) für Timelapse"))
+        self.btn_start_tl_stack.pack(pady=15)
+
+        # Rechts: Video Export
+        frame_vid = ctk.CTkFrame(parent)
+        frame_vid.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_vid, text="Schritt 2: Video Export", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_vid, text="Erstellt ein Timelapse aus den fertigen Stacks.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(0,5))
+        
+        opt_frame = ctk.CTkFrame(frame_vid, fg_color="transparent")
+        opt_frame.pack()
+        
+        # Hinweis: Auf deinem Screenshot gab es noch Buttons für Crop/Asteroid. Die passen hierhin!
+        # ctk.CTkButton(opt_frame, text="Bildausschnitt / Asteroid").pack(side="left", padx=5)
+
+        self.export_format = ctk.StringVar(value="JPEG (Schnell & Klein)")
+        ctk.CTkOptionMenu(opt_frame, variable=self.export_format, values=["JPEG (Schnell & Klein)", "PNG (Verlustfrei & Groß)"], width=160).pack(pady=5)
+
+        self.chk_denoise = ctk.CTkCheckBox(frame_vid, text="KI Denoise (SetiAstro)", variable=self.use_denoise, command=self._toggle_denoise_lite)
+        self.chk_denoise.pack(pady=2)
+        self.chk_lite = ctk.CTkCheckBox(frame_vid, text="Denoise Lite Mode", variable=self.use_denoise_lite, state="disabled")
+        self.chk_lite.pack(pady=2)
+
+        self.btn_timelapse = ctk.CTkButton(frame_vid, text="🎞️ Timelapse rendern", fg_color="#b87333", hover_color="#8c5827", command=lambda: self._trigger_timelapse("Quelle: FITS Stacks"))
+        self.btn_timelapse.pack(pady=10)
+
+    # --- TAB 2: SCIENCE ---
+    def _build_tab_science(self, parent):
+        parent.grid_columnconfigure((0, 1), weight=1)
+        
+        # Links: Globale Registrierung
+        frame_reg = ctk.CTkFrame(parent)
+        frame_reg.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_reg, text="Option A: Globale Registrierung", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_reg, text="Richtet ALLE Bilder des Input-Ordners an einem\neinzigen Referenzbild aus. Perfekt für globale Auswertung.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,15))
+        
+        btn_reg = ctk.CTkButton(frame_reg, text="▶ Nur Registrieren starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur registrieren (Für Photometrie / Global)"))
+        btn_reg.pack(pady=15)
+
+        # Rechts: Grünkanal Stacking
+        frame_green = ctk.CTkFrame(parent)
+        frame_green.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_green, text="Option B: Grünkanal Short-Stacking", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_green, text="Extrahiert nur den G-Kanal und stackt in Batches.\nIdeal für rauschärmere Photometrie-Daten.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,10))
+        
+        g_frame = ctk.CTkFrame(frame_green, fg_color="transparent")
+        g_frame.pack(pady=5)
+        ctk.CTkLabel(g_frame, text="Bilder pro Stack:").pack(side="left", padx=5)
+        ctk.CTkEntry(g_frame, textvariable=self.batch_size, width=60, justify="center").pack(side="left")
+
+        btn_green = ctk.CTkButton(frame_green, text="▶ Grünkanal-Stacking starten", fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Nur Grünkanal (Photometrie)"))
+        btn_green.pack(pady=10)
+
+    # --- TAB 3: TOOLS ---
+    def _build_tab_tools(self, parent):
+        parent.grid_columnconfigure((0, 1), weight=1)
+        
+        # Links: Direct Convert
+        frame_conv = ctk.CTkFrame(parent)
+        frame_conv.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_conv, text="FITS direkt zu JPG/PNG/TIF", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_conv, text="Kein Stacking. Wandelt alle Input-FITS\ndirekt in gestretchte Bilder um.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,10))
+        
+        # NEU: Das Dropdown-Menü für das Format
+        ctk.CTkOptionMenu(
+            frame_conv, 
+            variable=self.export_format, 
+            values=["JPEG (Schnell & Klein)", "PNG (Verlustfrei & Groß)", "TIFF (16-bit unkomprimiert)"], 
+            width=200
+        ).pack(pady=(0, 10))
+        
+        btn_conv = ctk.CTkButton(frame_conv, text="▶ Konvertierung starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur Konvertieren (Input direkt zu JPG/PNG)"))
+        btn_conv.pack(pady=5)
+
+        # Rechts: External Video
+        frame_ext = ctk.CTkFrame(parent)
+        frame_ext.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+        ctk.CTkLabel(frame_ext, text="Video aus fremdem Ordner", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
+        ctk.CTkLabel(frame_ext, text="Erstellt eine MP4-Datei aus einem Ordner\nvoller JPGs/PNGs/TIFs (z.B. aus StarStax).", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,25)) # Etwas mehr Padding wegen dem Dropdown auf der linken Seite
+        
+        btn_ext = ctk.CTkButton(frame_ext, text="🎞️ Ordner wählen & Video rendern", fg_color="#b87333", hover_color="#8c5827", command=lambda: self._trigger_timelapse("Quelle: Beliebiger Ordner (StarStax etc.)"))
+        btn_ext.pack(pady=15)
+
+    # --- HILFSMETHODEN ZUR BRÜCKENBILDUNG ---
+    def _trigger_stacking(self, mode_string):
+        """Setzt die versteckte Variable und startet den alten Prozess"""
+        self.stack_mode.set(mode_string)
+        self.start_stacking_thread()
+        
+    def _trigger_timelapse(self, source_string):
+        """Setzt die Video-Quelle und startet den Render-Prozess"""
+        # Da video_source im alten Code definiert wurde, stellen wir sicher, dass sie existiert
+        if not hasattr(self, 'video_source'):
+            self.video_source = ctk.StringVar()
+        self.video_source.set(source_string)
+        self.start_timelapse_thread()
 
     # --- HILFSMETHODEN FÜR GUI ---
     def _toggle_denoise_lite(self):
@@ -665,7 +957,12 @@ class ShortStackerApp(ctk.CTk):
             messagebox.showerror("Fehler", "Bitte eine gültige Zahl für die Batch-Größe eingeben!")
             return
 
-        self.btn_start.configure(state="disabled", text="Arbeite...")
+        # NEU: Schaltet alle Start-Buttons in der GUI ab, damit man nicht doppelt klickt
+        if hasattr(self, 'btn_stack_color'): self.btn_stack_color.configure(state="disabled")
+        if hasattr(self, 'btn_stack_green'): self.btn_stack_green.configure(state="disabled")
+        if hasattr(self, 'btn_stack_reg'): self.btn_stack_reg.configure(state="disabled")
+        if hasattr(self, 'btn_tool_conv'): self.btn_tool_conv.configure(state="disabled")
+        
         self.btn_stop.configure(state="normal", text="⏹ Stop")
         self.stop_requested = False
         self.progress_bar.set(0.0) 
@@ -711,9 +1008,15 @@ class ShortStackerApp(ctk.CTk):
             # --- DANN ERST DIE ABFRAGEN ---
             if is_direct_export:
                 format_choice = self.export_format.get()
-                is_png = "PNG" in format_choice
-                export_ext = "png" if is_png else "jpg"
-                export_cmd = "savepng" if is_png else "savejpg"
+                if "PNG" in format_choice:
+                    export_ext = "png"
+                    export_cmd = "savepng"
+                elif "TIFF" in format_choice:
+                    export_ext = "tif"
+                    export_cmd = "savetif"
+                else:
+                    export_ext = "jpg"
+                    export_cmd = "savejpg"
 
                 frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
                 if not os.path.exists(frames_dir):
@@ -917,8 +1220,13 @@ class ShortStackerApp(ctk.CTk):
             self.after(0, self._reset_buttons)
 
     def _reset_buttons(self):
-        self.btn_start.configure(state="normal", text="▶ Starten")
-        self.btn_stop.configure(state="disabled", text="⏹ Stop")
+        self.btn_stop.configure(state="disabled", text="⏹ Stop / Abbruch")
+        
+        # NEU: Schaltet die Buttons nach Abschluss wieder ein
+        if hasattr(self, 'btn_stack_color'): self.btn_stack_color.configure(state="normal")
+        if hasattr(self, 'btn_stack_green'): self.btn_stack_green.configure(state="normal")
+        if hasattr(self, 'btn_stack_reg'): self.btn_stack_reg.configure(state="normal")
+        if hasattr(self, 'btn_tool_conv'): self.btn_tool_conv.configure(state="normal")
         
     # --- TIMELAPSE LOGIK ---
     def start_timelapse_thread(self):
@@ -960,9 +1268,15 @@ class ShortStackerApp(ctk.CTk):
             is_custom = "Beliebiger" in source_choice
             
             format_choice = self.export_format.get()
-            is_png = "PNG" in format_choice
-            ext = "png" if is_png else "jpg"
-            save_cmd = "savepng" if is_png else "savejpg"
+            if "PNG" in format_choice:
+                ext = "png"
+                save_cmd = "savepng"
+            elif "TIFF" in format_choice:
+                ext = "tif"
+                save_cmd = "savetif"
+            else:
+                ext = "jpg"
+                save_cmd = "savejpg"
 
             # --- 1. ORDNER WEICHE ---
             if is_custom:
