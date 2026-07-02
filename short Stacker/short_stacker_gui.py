@@ -264,7 +264,7 @@ class ShortStackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         
-        self.title("Astro Short-Stacker (Siril & SetiAstro Automation) v1.7.0")
+        self.title("Astro Short-Stacker (Siril & SetiAstro Automation) v1.7.5")
         self.geometry("1400x680")
         try:
             if os.path.exists("shortstacker.ico"): 
@@ -289,6 +289,10 @@ class ShortStackerApp(ctk.CTk):
         self.use_denoise = ctk.BooleanVar(value=False)
         self.use_denoise_lite = ctk.BooleanVar(value=True)
         self.use_rmgreen = ctk.BooleanVar(value=True) # Standardmäßig an
+        
+        # NEU: Asteroiden-Markierung Einstellungen
+        self.marker_style = ctk.StringVar(value="Pfeil")
+        self.marker_size = ctk.IntVar(value=40)
         
         self.load_settings()
 
@@ -492,8 +496,14 @@ class ShortStackerApp(ctk.CTk):
         ctk.CTkButton(btn_fx, text="✂️ Bildausschnitt", width=100, command=self.open_crop_tool).pack(side="left", padx=2)
         ctk.CTkButton(btn_fx, text="☄️ Asteroid markieren", width=120, command=self.open_tracker_tool).pack(side="left", padx=2)
         
+        # NEU: Markierungs-Einstellungen (Dropdown + Slider)
+        marker_frame = ctk.CTkFrame(frame_fx, fg_color="transparent")
+        marker_frame.pack(pady=(0, 10))
+        ctk.CTkOptionMenu(marker_frame, variable=self.marker_style, values=["Pfeil", "Kreis", "Fadenkreuz"], width=100).pack(side="left", padx=2)
+        ctk.CTkSlider(marker_frame, variable=self.marker_size, from_=15, to=150, width=120).pack(side="left", padx=2)
+        
         self.chk_denoise = ctk.CTkCheckBox(frame_fx, text="KI Denoise (SetiAstro)", variable=self.use_denoise, command=self._toggle_denoise_lite)
-        self.chk_denoise.pack(pady=(15, 2))
+        self.chk_denoise.pack(pady=(5, 2))
         self.chk_lite = ctk.CTkCheckBox(frame_fx, text="Denoise Lite Mode", variable=self.use_denoise_lite, state="disabled")
         self.chk_lite.pack(pady=2)
 
@@ -1323,14 +1333,38 @@ class ShortStackerApp(ctk.CTk):
                     ast_x_end = end_x_orig - x1
                     ast_y_end = end_y_orig - y1
                     
-                    if N_frames > 1:
-                        cur_x = int(ast_x_start + (idx / (N_frames - 1)) * (ast_x_end - ast_x_start))
-                        cur_y = int(ast_y_start + (idx / (N_frames - 1)) * (ast_y_end - ast_y_start))
+                    # Berechnet die exakte Position für das aktuelle Bild (auch wenn es nur 1 Bild gibt)
+                    cur_x = int(ast_x_start + (idx / (N_frames - 1)) * (ast_x_end - ast_x_start)) if N_frames > 1 else ast_x_start
+                    cur_y = int(ast_y_start + (idx / (N_frames - 1)) * (ast_y_end - ast_y_start)) if N_frames > 1 else ast_y_start
+                    
+                    # Variablen aus der GUI holen
+                    m_style = self.marker_style.get()
+                    m_size = int(self.marker_size.get())
+                    m_color = (0, 0, 200) # Rot in BGR
+                    m_thick = 2
+                    
+                    if m_style == "Pfeil":
+                        gap = 8 # Abstand der Pfeilspitze zum Objekt
+                        if m_size <= gap: m_size = gap + 10 # Verhindert Fehler, wenn Regler zu klein
+                        arrow_start = (cur_x - m_size, cur_y - m_size)
+                        arrow_end = (cur_x - gap, cur_y - gap)
+                        cv2.arrowedLine(img_cropped, arrow_start, arrow_end, m_color, m_thick, cv2.LINE_AA, 0, 0.2)
                         
-                        arrow_start = (cur_x - 40, cur_y - 40)
-                        arrow_end = (cur_x - 6, cur_y - 6)
+                    elif m_style == "Kreis":
+                        # Zieht einen sauberen Kreis
+                        cv2.circle(img_cropped, (cur_x, cur_y), m_size, m_color, m_thick, cv2.LINE_AA)
                         
-                        cv2.arrowedLine(img_cropped, arrow_start, arrow_end, (0, 0, 200), 2, cv2.LINE_AA, 0, 0.25)
+                    elif m_style == "Fadenkreuz":
+                        # Zeichnet 4 Linien mit Lücke in der Mitte, damit der Asteroid sichtbar bleibt
+                        gap = 8 
+                        # Oben
+                        cv2.line(img_cropped, (cur_x, cur_y - gap), (cur_x, cur_y - gap - m_size), m_color, m_thick, cv2.LINE_AA)
+                        # Unten
+                        cv2.line(img_cropped, (cur_x, cur_y + gap), (cur_x, cur_y + gap + m_size), m_color, m_thick, cv2.LINE_AA)
+                        # Links
+                        cv2.line(img_cropped, (cur_x - gap, cur_y), (cur_x - gap - m_size, cur_y), m_color, m_thick, cv2.LINE_AA)
+                        # Rechts
+                        cv2.line(img_cropped, (cur_x + gap, cur_y), (cur_x + gap + m_size, cur_y), m_color, m_thick, cv2.LINE_AA)
 
                 if self.crop_coordinates or (hasattr(self, 'asteroid_coordinates') and self.asteroid_coordinates):
                     cv2.imwrite(dst, img_cropped)
