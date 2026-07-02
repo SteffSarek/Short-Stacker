@@ -110,7 +110,7 @@ class TrackerToolWindow(ctk.CTkToplevel):
         
         self.start_coords = None
         self.end_coords = None
-        self.state = "START"
+        self.click_state = "START"
         self.current_preview = "START"
 
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -181,12 +181,12 @@ class TrackerToolWindow(ctk.CTkToplevel):
         if self.current_preview == "START":
             self.load_image(self.last_image_path)
             self.current_preview = "END"
-            if self.state == "START":
+            if self.click_state == "START":
                 self.lbl_info.configure(text="VORSCHAU: LETZTES Bild. (Klicke auf Blinken, um zurückzugehen)", text_color="#aaaaaa")
         else:
             self.load_image(self.first_image_path)
             self.current_preview = "START"
-            if self.state == "START":
+            if self.click_state == "START":
                 self.lbl_info.configure(text="Schritt 1: Klicke auf den Asteroiden im ERSTEN Bild.", text_color="#00ff00")
 
     def update_loupe(self, event):
@@ -217,7 +217,7 @@ class TrackerToolWindow(ctk.CTkToplevel):
         self.loupe_canvas.create_line(100, 120, 140, 120, fill="#ffff00", width=1)
 
     def on_click(self, event):
-        if self.state == "START" and self.current_preview == "END":
+        if self.click_state == "START" and self.current_preview == "END":
             self.load_image(self.first_image_path)
             self.current_preview = "START"
 
@@ -225,19 +225,19 @@ class TrackerToolWindow(ctk.CTkToplevel):
         real_y = int(event.y * self.scale_factor)
         r = 8 
 
-        if self.state == "START":
+        if self.click_state == "START":
             self.start_coords = (real_x, real_y)
             self.canvas.create_oval(event.x-r, event.y-r, event.x+r, event.y+r, outline="#00ff00", width=2)
-            self.state = "END"
+            self.click_state = "END"
             
             self.lbl_info.configure(text="Lade letztes Bild...", text_color="#ffffff")
             self.after(200, lambda: self.load_image(self.last_image_path))
             self.after(200, lambda: self.set_end_state())
 
-        elif self.state == "END":
+        elif self.click_state == "END":
             self.end_coords = (real_x, real_y)
             self.canvas.create_oval(event.x-r, event.y-r, event.x+r, event.y+r, outline="#ff0000", width=2)
-            self.state = "DONE"
+            self.click_state = "DONE"
             
             self.lbl_info.configure(text="Fertig! Klicke auf 'Blinken' zum Prüfen oder auf 'Übernehmen'.", text_color="#ffffff")
             self.btn_apply.configure(state="normal")
@@ -247,7 +247,7 @@ class TrackerToolWindow(ctk.CTkToplevel):
         self.lbl_info.configure(text="Schritt 2: Klicke auf den Asteroiden im LETZTEN Bild.", text_color="#ff0000")
 
     def reset(self):
-        self.state = "START"
+        self.click_state = "START"
         self.current_preview = "START"
         self.start_coords = None
         self.end_coords = None
