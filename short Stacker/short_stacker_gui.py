@@ -20,7 +20,6 @@ class CropToolWindow(ctk.CTkToplevel):
     def __init__(self, master, image_path, callback):
         super().__init__(master)
         self.title("Bildausschnitt (Crop) festlegen")
-        # Fenstergröße anpassen, falls nötig
         self.geometry("1200x800")
         self.transient(master)
         self.grab_set()
@@ -28,7 +27,6 @@ class CropToolWindow(ctk.CTkToplevel):
         self.callback = callback
         self.crop_coords = None
 
-        # 1. Bild laden und Größe ermitteln
         try:
             self.original_image = Image.open(image_path)
         except Exception as e:
@@ -38,24 +36,20 @@ class CropToolWindow(ctk.CTkToplevel):
 
         self.orig_w, self.orig_h = self.original_image.size
 
-        # 2. Skalierungsfaktor für die Anzeige berechnen (max 900x700 für die GUI)
         max_disp_w, max_disp_h = 900, 700
         scale = min(max_disp_w / self.orig_w, max_disp_h / self.orig_h)
         
         self.disp_w = int(self.orig_w * scale)
         self.disp_h = int(self.orig_h * scale)
-        self.scale_factor = 1 / scale # Umrechnungsfaktor von Anzeige zu Original
+        self.scale_factor = 1 / scale 
 
-        # Bild für die Anzeige skalieren
         self.disp_image = self.original_image.resize((self.disp_w, self.disp_h), Image.Resampling.LANCZOS)
         self.tk_image = ImageTk.PhotoImage(self.disp_image)
 
-        # 3. Canvas (Zeichenfläche) erstellen
         self.canvas = tk.Canvas(self, width=self.disp_w, height=self.disp_h, cursor="cross", bg="#1a1a1a", highlightthickness=0)
         self.canvas.pack(pady=10)
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
 
-        # Maus-Events binden
         self.canvas.bind("<ButtonPress-1>", self.on_press)
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_release)
@@ -64,7 +58,6 @@ class CropToolWindow(ctk.CTkToplevel):
         self.start_x = None
         self.start_y = None
 
-        # 4. Buttons
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=10)
         
@@ -78,15 +71,12 @@ class CropToolWindow(ctk.CTkToplevel):
         self.start_y = event.y
         if self.rect_id:
             self.canvas.delete(self.rect_id)
-        # Zeichnet ein rotes Rechteck
         self.rect_id = self.canvas.create_rectangle(self.start_x, self.start_y, self.start_x, self.start_y, outline="red", width=2)
 
     def on_drag(self, event):
-        # Aktualisiert das Rechteck während des Ziehens
         self.canvas.coords(self.rect_id, self.start_x, self.start_y, event.x, event.y)
 
     def on_release(self, event):
-        # Berechne die echten Pixelkoordinaten auf dem Originalbild
         end_x, end_y = event.x, event.y
         
         x1 = int(min(self.start_x, end_x) * self.scale_factor)
@@ -94,23 +84,23 @@ class CropToolWindow(ctk.CTkToplevel):
         x2 = int(max(self.start_x, end_x) * self.scale_factor)
         y2 = int(max(self.start_y, end_y) * self.scale_factor)
         
-        # Sicherstellen, dass die Koordinaten im Bild bleiben
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(self.orig_w, x2), min(self.orig_h, y2)
 
         self.crop_coords = (x1, y1, x2, y2)
-        self.btn_apply.configure(state="normal") # Button freischalten
+        self.btn_apply.configure(state="normal") 
 
     def apply_crop(self):
         if self.crop_coords:
-            self.callback(self.crop_coords) # Übergibt (x1, y1, x2, y2) an die Haupt-App
+            self.callback(self.crop_coords) 
             self.destroy()
+
 
 class TrackerToolWindow(ctk.CTkToplevel):
     def __init__(self, master, first_image_path, last_image_path, callback):
         super().__init__(master)
         self.title("Asteroid markieren (Start & Ende)")
-        self.geometry("1200x850") # Breiter für die Lupe
+        self.geometry("1200x850") 
         self.transient(master)
         self.grab_set()
 
@@ -123,7 +113,6 @@ class TrackerToolWindow(ctk.CTkToplevel):
         self.state = "START"
         self.current_preview = "START"
 
-        # --- UI Setup ---
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.pack(fill="x", pady=10)
 
@@ -141,7 +130,6 @@ class TrackerToolWindow(ctk.CTkToplevel):
         self.canvas.bind("<ButtonPress-1>", self.on_click)
         self.canvas.bind("<Motion>", self.update_loupe)
 
-        # Rechter Bereich: Lupe
         right_frame = ctk.CTkFrame(main_frame, width=280)
         right_frame.pack(side="right", fill="y", padx=10)
 
@@ -179,7 +167,6 @@ class TrackerToolWindow(ctk.CTkToplevel):
         self.canvas.config(width=self.disp_w, height=self.disp_h)
         self.canvas.create_image(0, 0, anchor="nw", image=self.tk_image)
 
-        # Markierungen neu zeichnen (wichtig fürs Blinken)
         r = 8
         if self.start_coords:
             sx = self.start_coords[0] / self.scale_factor
@@ -208,32 +195,28 @@ class TrackerToolWindow(ctk.CTkToplevel):
         rx = int(event.x * self.scale_factor)
         ry = int(event.y * self.scale_factor)
         
-        box_size = 80 # 80x80 Pixel aus dem Originalbild
+        box_size = 80 
         left = rx - box_size // 2
         upper = ry - box_size // 2
         right = rx + box_size // 2
         lower = ry + box_size // 2
         
-        # Ränder abfangen
         if left < 0: left = 0; right = box_size
         if upper < 0: upper = 0; lower = box_size
         if right > self.orig_w: right = self.orig_w; left = self.orig_w - box_size
         if lower > self.orig_h: lower = self.orig_h; upper = self.orig_h - box_size
         
         crop = self.original_image.crop((left, upper, right, lower))
-        # NEAREST erhält die harte Pixelstruktur ohne Weichzeichner
         zoomed = crop.resize((240, 240), Image.Resampling.NEAREST) 
         
         self.loupe_tk_image = ImageTk.PhotoImage(zoomed)
         self.loupe_canvas.delete("all")
         self.loupe_canvas.create_image(0, 0, anchor="nw", image=self.loupe_tk_image)
         
-        # Fadenkreuz in gelb
         self.loupe_canvas.create_line(120, 100, 120, 140, fill="#ffff00", width=1)
         self.loupe_canvas.create_line(100, 120, 140, 120, fill="#ffff00", width=1)
 
     def on_click(self, event):
-        # Wenn im Vorschau-Modus (Blink) falsch geklickt wird:
         if self.state == "START" and self.current_preview == "END":
             self.load_image(self.first_image_path)
             self.current_preview = "START"
@@ -276,6 +259,7 @@ class TrackerToolWindow(ctk.CTkToplevel):
         self.callback(self.start_coords, self.end_coords)
         self.destroy()
 
+
 class ShortStackerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
@@ -291,7 +275,6 @@ class ShortStackerApp(ctk.CTk):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(6, weight=1) 
 
-        # --- VARIABLEN & EINSTELLUNGEN ---
         self.settings_file = "shortstacker_settings.json"
         
         self.input_folder = ctk.StringVar()
@@ -303,19 +286,18 @@ class ShortStackerApp(ctk.CTk):
         self.batch_size = ctk.StringVar(value="6")
         self.stop_requested = False 
         
-        # Denoise Variablen
         self.use_denoise = ctk.BooleanVar(value=False)
-        self.use_denoise_lite = ctk.BooleanVar(value=True) # Standardmäßig an, aber erst aktiv wenn Haupt-Haken gesetzt
+        self.use_denoise_lite = ctk.BooleanVar(value=True)
+        self.use_rmgreen = ctk.BooleanVar(value=True) # Standardmäßig an
         
         self.load_settings()
 
         self._build_gui()
         
-        # --- VARIABLEN ---
         self.crop_coordinates = None
-        self.asteroid_coordinates = None  # <--- NEU
+        self.asteroid_coordinates = None
+        self.last_custom_folder = ""
 
-    # --- SETTINGS SPEICHERN/LADEN ---
     def load_settings(self):
         default_siril = r"C:\Program Files\Siril\bin\siril-cli.exe"
         default_ffmpeg = "ffmpeg"
@@ -351,125 +333,32 @@ class ShortStackerApp(ctk.CTk):
         except Exception:
             pass
             
-    def open_crop_tool(self):
-        source_choice = self.video_source.get()
-        is_custom = "Beliebiger Ordner" in source_choice
-        is_unstacked = "Einzelbilder" in source_choice
-        out_dir = self.output_folder.get()
-
-        if not is_custom and not out_dir:
-            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
-            return
-
-        # --- ORDNER WEICHE (Wie beim Timelapse-Rendern) ---
-        if is_custom:
-            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Vorschau wählen")
-            if not frames_dir:
-                return  # Abgebrochen
-        elif is_unstacked:
-            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
-        else:
-            frames_dir = os.path.join(out_dir, "timelapse_frames")
-
-        if not os.path.exists(frames_dir):
-            messagebox.showinfo("Hinweis", f"Ordner nicht gefunden:\n{frames_dir}\nBitte führe zuerst den entsprechenden Vor-Schritt durch.")
-            return
-
-        # Suche nach einem Bild (JPG, PNG, TIF) für die Vorschau
-        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
-        images = []
-        for ext_pattern in valid_exts:
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
-
-        images = sorted(list(set(images)))
-        
-        if not images:
-            messagebox.showerror("Fehler", f"Keine Bilder für die Vorschau im Ordner gefunden:\n{frames_dir}")
-            return
-
-        self.last_custom_folder = frames_dir  # <--- NEU: Merke dir den Ordner für später
-        
-        first_image = images[0]
-        
-        # Öffnet das Crop-Fenster und übergibt die Methode zum Speichern der Koordinaten
-        CropToolWindow(self, first_image, self.save_crop_coords)
-
-    def save_crop_coords(self, coords):
-        self.crop_coordinates = coords
-        x1, y1, x2, y2 = coords
-        self.log(f"Crop-Rahmen gesetzt: X({x1} bis {x2}), Y({y1} bis {y2})")        
-
-    def open_tracker_tool(self):
-        source_choice = self.video_source.get()
-        is_custom = "Beliebiger Ordner" in source_choice
-        is_unstacked = "Einzelbilder" in source_choice
-        out_dir = self.output_folder.get()
-
-        if not is_custom and not out_dir:
-            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
-            return
-
-        # Ordner-Logik identisch zum Crop-Tool
-        if is_custom:
-            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Asteroiden-Tracking wählen")
-            if not frames_dir: return
-            self.last_custom_folder = frames_dir
-        elif is_unstacked:
-            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
-        else:
-            frames_dir = os.path.join(out_dir, "timelapse_frames")
-
-        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
-        images = []
-        for ext_pattern in valid_exts:
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
-
-        images = sorted(list(set(images)))
-        if not images:
-            messagebox.showerror("Fehler", "Keine Bilder gefunden.")
-            return
-
-        first_image = images[0]
-        last_image = images[-1] # Letztes Bild im Array!
-        
-        TrackerToolWindow(self, first_image, last_image, self.save_tracker_coords)
-
-    def save_tracker_coords(self, start_coords, end_coords):
-        self.asteroid_coordinates = (start_coords, end_coords)
-        self.log(f"Asteroid markiert: Start {start_coords} -> Ende {end_coords}")
-    
     def _build_gui(self):
-        # --- TOP BAR ---
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.grid(row=0, column=0, padx=20, pady=(10, 0), sticky="ew")
         ctk.CTkLabel(top_frame, text="Astro Short-Stacker v1.7.0", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
         ctk.CTkButton(top_frame, text="⚙️ Einstellungen", width=120, fg_color="#454545", hover_color="#2b2b2b", command=self.open_settings).pack(side="right")
 
-        # --- GLOBALE PFADE ---
         frame_paths = ctk.CTkFrame(self)
         frame_paths.grid(row=1, column=0, padx=20, pady=(15, 10), sticky="ew")
         
-        self.lbl_input = ctk.CTkLabel(frame_paths, text="1. Input (Originale 10s FITS):", width=220, anchor="w")
+        self.lbl_input = ctk.CTkLabel(frame_paths, text="1. Input-Ordner:", width=220, anchor="w")
         self.lbl_input.grid(row=0, column=0, padx=10, pady=(10, 5))
         ctk.CTkEntry(frame_paths, textvariable=self.input_folder, state="readonly", width=400).grid(row=0, column=1, padx=10, pady=(10, 5), sticky="ew")
         self.btn_input = ctk.CTkButton(frame_paths, text="Ordner wählen", command=self.select_input, width=120)
         self.btn_input.grid(row=0, column=2, padx=10, pady=(10, 5))
         
-        self.lbl_output = ctk.CTkLabel(frame_paths, text="2. Output (Fertige Dateien):", width=220, anchor="w")
+        self.lbl_output = ctk.CTkLabel(frame_paths, text="2. Output-Ordner:", width=220, anchor="w")
         self.lbl_output.grid(row=1, column=0, padx=10, pady=(0, 10))
         ctk.CTkEntry(frame_paths, textvariable=self.output_folder, state="readonly", width=400).grid(row=1, column=1, padx=10, pady=(0, 10), sticky="ew")
         self.btn_output = ctk.CTkButton(frame_paths, text="Ordner wählen", command=self.select_output, width=120)
         self.btn_output.grid(row=1, column=2, padx=10, pady=(0, 10))
         frame_paths.grid_columnconfigure(1, weight=1)
 
-        # Globale Variablen für Backend-Kompatibilität
         self.stack_mode = ctk.StringVar(value="")
         self.export_format = ctk.StringVar(value="JPEG (Schnell & Klein)")
-        self.video_source = ctk.StringVar(value="Quelle: FITS Stacks")
+        self.video_source = ctk.StringVar(value="A: FITS aus Input-Ordner ➡️ Video in Output")
 
-        # --- WORKFLOW TABS ---
         self.tabview = ctk.CTkTabview(self, height=240, command=self.update_path_states)
         self.tabview.grid(row=2, column=0, padx=20, pady=5, sticky="ew")
         
@@ -481,7 +370,6 @@ class ShortStackerApp(ctk.CTk):
         self._build_tab_video(tab_video)
         self._build_tab_tools(tab_tools)
 
-        # --- FORTSCHRITT & LOG ---
         progress_frame = ctk.CTkFrame(self, fg_color="transparent")
         progress_frame.grid(row=5, column=0, padx=20, pady=(10, 0), sticky="ew")
         
@@ -500,50 +388,41 @@ class ShortStackerApp(ctk.CTk):
         self.update_path_states()
         
     def update_path_states(self, *args):
-        """Prüft, in welchem Tab wir sind und graut ungenutzte Ordner-Pfade aus."""
         current_tab = self.tabview.get()
 
         if "FITS Aufbereitung" in current_tab or "Tools" in current_tab:
-            # Tab 1 und 3 brauchen zwingend Input UND Output
-            self._set_path_state("input", True)
-            self._set_path_state("output", True)
+            self._set_path_state("input", True, "1. Input (Originale 10s FITS):")
+            self._set_path_state("output", True, "2. Output (Fertige Dateien):")
             
         elif "Video Builder" in current_tab:
             src = self.video_source.get()
-            if "Beliebiger" in src:
-                # Braucht weder Input noch Output (Dialog fragt später extra)
-                self._set_path_state("input", False)
-                self._set_path_state("output", False)
+            if "Input-Ordner" in src:
+                self._set_path_state("input", True, "1. Input (Hier liegen die FITS):")
+                self._set_path_state("output", True, "2. Output (Hierhin wird das Video gespeichert):")
+            elif "Output-Ordner" in src:
+                self._set_path_state("input", False, "1. Input (Wird hier ignoriert)")
+                self._set_path_state("output", True, "2. Output (Quelle für FITS UND Ziel für Video):")
             else:
-                # Braucht nur den Output-Ordner (um dort die fertigen Stacks zu finden)
-                self._set_path_state("input", False)
-                self._set_path_state("output", True)
+                self._set_path_state("input", False, "1. Input (Wird hier ignoriert)")
+                self._set_path_state("output", False, "2. Output (Dialog fragt gleich nach dem Ordner)")
 
-    def _set_path_state(self, path_type, is_active):
+    def _set_path_state(self, path_type, is_active, custom_text=""):
         state = "normal" if is_active else "disabled"
         text_color = ["gray10", "#DCE4EE"] if is_active else "gray50"
 
         if path_type == "input":
             self.btn_input.configure(state=state)
             self.lbl_input.configure(text_color=text_color)
-            if is_active:
-                self.lbl_input.configure(text="1. Input (Originale 10s FITS):")
-            else:
-                self.lbl_input.configure(text="1. Input (Wird hier ignoriert)")
-
+            if custom_text: self.lbl_input.configure(text=custom_text)
         elif path_type == "output":
             self.btn_output.configure(state=state)
             self.lbl_output.configure(text_color=text_color)
-            if is_active:
-                self.lbl_output.configure(text="2. Output (Fertige Dateien):")
-            else:
-                self.lbl_output.configure(text="2. Output (Wird hier ignoriert)")
+            if custom_text: self.lbl_output.configure(text=custom_text)
 
     # --- TAB 1: STACKING & REGISTRIERUNG ---
     def _build_tab_stacking(self, parent):
         parent.grid_columnconfigure((0, 1), weight=1)
         
-        # Stacking (DeepSky)
         frame_stack = ctk.CTkFrame(parent)
         frame_stack.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         ctk.CTkLabel(frame_stack, text="Option A: Short-Stacking", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
@@ -557,43 +436,53 @@ class ShortStackerApp(ctk.CTk):
         btn_frame1 = ctk.CTkFrame(frame_stack, fg_color="transparent")
         btn_frame1.pack(pady=10)
         
+        # Zeile 1: Die normalen Buttons
         self.btn_stack_color = ctk.CTkButton(btn_frame1, text="▶ Farbe (Debayer)", width=130, fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Farbe (Debayer) für Timelapse"))
-        self.btn_stack_color.pack(side="left", padx=5)
+        self.btn_stack_color.grid(row=0, column=0, padx=5, pady=5)
         
-        self.btn_stack_green = ctk.CTkButton(btn_frame1, text="▶ Nur Grünkanal", width=130, fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Nur Grünkanal (Photometrie)"))
-        self.btn_stack_green.pack(side="left", padx=5)
+        self.btn_stack_green = ctk.CTkButton(btn_frame1, text="▶ Nur Grünkanal", width=130, fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Nur Grünkanal"))
+        self.btn_stack_green.grid(row=0, column=1, padx=5, pady=5)
 
-        # Global Registrieren (Asteroiden)
+        # Zeile 2: Der neue "Super-Button" (Zusammengeführter Prozess)
+        self.btn_stack_green_reg = ctk.CTkButton(btn_frame1, text="▶ Grünkanal Stacking + Globale Registrierung", width=270, fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("Grünkanal + Global Reg"))
+        self.btn_stack_green_reg.grid(row=1, column=0, columnspan=2, padx=5, pady=5)
+
         frame_reg = ctk.CTkFrame(parent)
         frame_reg.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         ctk.CTkLabel(frame_reg, text="Option B: Globale Registrierung", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
         ctk.CTkLabel(frame_reg, text="Richtet alle Bilder an einem Referenzbild aus.\nZwingend erforderlich für Asteroiden-Timelapses!", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,15))
         
-        self.btn_stack_reg = ctk.CTkButton(frame_reg, text="▶ Nur Registrieren starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur registrieren (Für Photometrie / Global)"))
-        self.btn_stack_reg.pack(pady=20)
+        # NEU: Zwei separate Buttons für Farbe (Video) und Mono (Wissenschaft)
+        self.btn_stack_reg_color = ctk.CTkButton(frame_reg, text="▶ Registrieren (FARBE für Timelapse)", fg_color="#b87333", hover_color="#8c5827", command=lambda: self._trigger_stacking("➡️ Nur registrieren (Farbe)"))
+        self.btn_stack_reg_color.pack(pady=(0, 10))
+        
+        self.btn_stack_reg = ctk.CTkButton(frame_reg, text="▶ Registrieren (MONO für Photometrie)", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur registrieren (Photometrie)"))
+        self.btn_stack_reg.pack(pady=5)
 
     # --- TAB 2: VIDEO BUILDER & EFFEKTE ---
     def _build_tab_video(self, parent):
         parent.grid_columnconfigure((0, 1, 2), weight=1)
         
-        # Spalte 1: Quelle & Format
         frame_src = ctk.CTkFrame(parent)
         frame_src.grid(row=0, column=0, padx=5, pady=5, sticky="nsew")
         ctk.CTkLabel(frame_src, text="1. Quelle & Format", font=ctk.CTkFont(weight="bold")).pack(pady=10)
         
         ctk.CTkOptionMenu(frame_src, variable=self.video_source, values=[
-            "Quelle: FITS Stacks", 
-            "Quelle: Einzelbilder (Unstacked)", 
-            "Quelle: Beliebiger Ordner (StarStax etc.)"
-        ], width=200, command=self.update_path_states).pack(pady=(5, 10))
+            "A: FITS aus Input-Ordner ➡️ Video in Output", 
+            "B: FITS aus Output-Ordner ➡️ Video in Output", 
+            "C: Beliebiger Ordner mit Bildern (JPG/PNG/TIF)"
+        ], width=260, command=self.update_path_states).pack(pady=(5, 10))
         
         ctk.CTkOptionMenu(frame_src, variable=self.export_format, values=[
             "JPEG (Schnell & Klein)", 
             "PNG (Verlustfrei & Groß)",
             "TIFF (16-bit unkomprimiert)"
         ], width=180).pack(pady=5)
+        
+        # NEU: Checkbox für rmgreen
+        self.chk_rmgreen = ctk.CTkCheckBox(frame_src, text="Grünstich entfernen (nur bei Farbe!)", variable=self.use_rmgreen)
+        self.chk_rmgreen.pack(pady=(15, 5))
 
-        # Spalte 2: Effekte & Tools (Asteroiden & Denoise)
         frame_fx = ctk.CTkFrame(parent)
         frame_fx.grid(row=0, column=1, padx=5, pady=5, sticky="nsew")
         ctk.CTkLabel(frame_fx, text="2. Effekte & Tools", font=ctk.CTkFont(weight="bold")).pack(pady=10)
@@ -608,7 +497,6 @@ class ShortStackerApp(ctk.CTk):
         self.chk_lite = ctk.CTkCheckBox(frame_fx, text="Denoise Lite Mode", variable=self.use_denoise_lite, state="disabled")
         self.chk_lite.pack(pady=2)
 
-        # Spalte 3: Rendern
         frame_render = ctk.CTkFrame(parent)
         frame_render.grid(row=0, column=2, padx=5, pady=5, sticky="nsew")
         ctk.CTkLabel(frame_render, text="3. Fertigstellen", font=ctk.CTkFont(weight="bold")).pack(pady=(10, 15))
@@ -629,57 +517,119 @@ class ShortStackerApp(ctk.CTk):
         self.btn_tool_conv = ctk.CTkButton(frame_conv, text="▶ Direkt-Konvertierung starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur Konvertieren (Input direkt zu JPG/PNG)"))
         self.btn_tool_conv.pack(pady=15)
 
-    # --- BRÜCKEN-METHODEN ---
-    def _trigger_stacking(self, mode_string):
-        self.stack_mode.set(mode_string)
-        self.start_stacking_thread()
-
-    def _toggle_denoise_lite(self):
-        if self.use_denoise.get():
-            self.chk_lite.configure(state="normal")
-        else:
-            self.chk_lite.configure(state="disabled")
 
     # =================================================================
-    # CROP & TRACKING LOGIK
+    # FITS ON-THE-FLY PREVIEW GENERATOR
+    # =================================================================
+    def _find_fits_files(self, directory):
+        """Hilfsmethode, um zuverlässig alle FITS (auch großgeschrieben) zu finden."""
+        if not directory or not os.path.exists(directory):
+            return []
+        patterns = ['*.fit', '*.fits', '*.FIT', '*.FITS']
+        files = []
+        for p in patterns:
+            files.extend(glob.glob(os.path.join(directory, p)))
+        return sorted(list(set(files))) # Gibt eine eindeutige, sortierte Liste zurück
+
+    def _generate_fits_preview(self, fits_path):
+        """Erzeugt über Siril blitzschnell ein gestretchtes JPG aus einer FITS-Datei zur Vorschau."""
+        temp_dir = os.path.join(os.path.dirname(fits_path), "siril_temp_preview")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        out_jpg_base = os.path.join(temp_dir, "preview")
+        out_jpg_full = out_jpg_base + ".jpg"
+        
+        # Altes Bild löschen, falls vorhanden
+        if os.path.exists(out_jpg_full):
+            try:
+                os.remove(out_jpg_full)
+            except Exception:
+                pass
+            
+        # Pfad in Siril-freundliches Format umwandeln
+        fits_dir = os.path.dirname(fits_path).replace("\\", "/")
+        fits_name = os.path.basename(fits_path)
+        out_jpg_base_siril = out_jpg_base.replace("\\", "/")
+            
+        script_path = os.path.join(temp_dir, "preview.ssf")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("requires 1.2.0\n")
+            f.write(f'cd "{fits_dir}"\n')       # 1. Sicher in den Ordner navigieren
+            f.write(f'load "{fits_name}"\n')    # 2. Nur den reinen Dateinamen laden
+            f.write("autostretch\n")            # 3. Nur stretchen, keine Farbbefehle (vermeidet Abstürze)
+            f.write(f'savejpg "{out_jpg_base_siril}"\n')
+            f.write("close\n")
+
+        # Siril starten und Konsolenausgabe abfangen (capture_output=True)
+        try:
+            process = subprocess.run(
+                [self.siril_path.get(), "-s", script_path], 
+                capture_output=True, text=True, 
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+        except Exception as e:
+            self.log(f"Siril konnte nicht gestartet werden: {str(e)}")
+            return None
+
+        # Dem Dateisystem kurz Zeit geben
+        time.sleep(0.1)
+
+        if os.path.exists(out_jpg_full):
+            return out_jpg_full
+        else:
+            # WENN ES FEHLSCHLÄGT: Siril Fehlermeldung ins Log schreiben!
+            self.log("\n--- SIRIL KONNTE VORSCHAU NICHT ERSTELLEN ---")
+            self.log("Siril Logausgabe:")
+            if process.stdout: self.log(process.stdout.strip())
+            if process.stderr: self.log(process.stderr.strip())
+            self.log("---------------------------------------------")
+            return None
+
+    # =================================================================
+    # CROP & TRACKING LOGIK (VEREINFACHT & FITS-KOMPATIBEL)
     # =================================================================
     def open_crop_tool(self):
         source_choice = self.video_source.get()
-        is_custom = "Beliebiger Ordner" in source_choice
-        is_unstacked = "Einzelbilder" in source_choice
-        out_dir = self.output_folder.get()
-
-        if not is_custom and not out_dir:
-            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
-            return
-
-        if is_custom:
-            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Vorschau wählen")
-            if not frames_dir: return  
-        elif is_unstacked:
-            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
-        else:
-            frames_dir = os.path.join(out_dir, "timelapse_frames")
-
-        if not os.path.exists(frames_dir):
-            messagebox.showinfo("Hinweis", f"Ordner nicht gefunden:\n{frames_dir}\nBitte führe zuerst die FITS-Aufbereitung (oder Konvertierung) durch, damit Bilder zum Bearbeiten existieren!")
-            return
-
-        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
-        images = []
-        for ext_pattern in valid_exts:
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
-
-        images = sorted(list(set(images)))
+        is_fits = "FITS" in source_choice
         
-        if not images:
-            messagebox.showerror("Fehler", f"Keine Bilder für die Vorschau im Ordner gefunden:\n{frames_dir}")
-            return
+        if is_fits:
+            target_dir = self.input_folder.get() if "Input" in source_choice else self.output_folder.get()
+            if not target_dir:
+                messagebox.showerror("Fehler", "Bitte den entsprechenden Ordner (Input/Output) auswählen!")
+                return
+                
+            # NEU: Nutzt die sichere Suchfunktion
+            fits_files = self._find_fits_files(target_dir)
+            
+            if not fits_files:
+                messagebox.showerror("Fehler", f"Keine FITS Dateien im Ordner gefunden:\n{target_dir}")
+                return
+                
+            self.log("Erstelle Vorschau-Bild aus FITS... Bitte kurz warten.")
+            self.update_idletasks() # UI aktualisieren
+            
+            preview_img = self._generate_fits_preview(fits_files[0])
+            if preview_img:
+                CropToolWindow(self, preview_img, self.save_crop_coords)
+            else:
+                messagebox.showerror("Fehler", "Konnte Vorschau nicht generieren. Ist der Siril-Pfad korrekt?")
+        else:
+            frames_dir = filedialog.askdirectory(title="Ordner mit Bildern (JPG/PNG) wählen")
+            if not frames_dir: return  
+            
+            valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
+            images = []
+            for ext_pattern in valid_exts:
+                images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
+                images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
 
-        self.last_custom_folder = frames_dir  
-        first_image = images[0]
-        CropToolWindow(self, first_image, self.save_crop_coords)
+            images = sorted(list(set(images)))
+            if not images:
+                messagebox.showerror("Fehler", f"Keine Bilder für die Vorschau im Ordner gefunden:\n{frames_dir}")
+                return
+
+            self.last_custom_folder = frames_dir  
+            CropToolWindow(self, images[0], self.save_crop_coords)
 
     def save_crop_coords(self, coords):
         self.crop_coordinates = coords
@@ -688,158 +638,62 @@ class ShortStackerApp(ctk.CTk):
 
     def open_tracker_tool(self):
         source_choice = self.video_source.get()
-        is_custom = "Beliebiger Ordner" in source_choice
-        is_unstacked = "Einzelbilder" in source_choice
-        out_dir = self.output_folder.get()
-
-        if not is_custom and not out_dir:
-            messagebox.showerror("Fehler", "Bitte zuerst den Output-Ordner festlegen.")
-            return
-
-        if is_custom:
-            frames_dir = filedialog.askdirectory(title="Beliebigen Ordner für Asteroiden-Tracking wählen")
-            if not frames_dir: return
-            self.last_custom_folder = frames_dir
-        elif is_unstacked:
-            frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
+        is_fits = "FITS" in source_choice
+        
+        if is_fits:
+            target_dir = self.input_folder.get() if "Input" in source_choice else self.output_folder.get()
+            if not target_dir:
+                messagebox.showerror("Fehler", "Bitte den entsprechenden Ordner (Input/Output) auswählen!")
+                return
+                
+            # NEU: Nutzt die sichere Suchfunktion
+            fits_files = self._find_fits_files(target_dir)
+            
+            if not fits_files:
+                messagebox.showerror("Fehler", f"Keine FITS Dateien im Ordner gefunden:\n{target_dir}")
+                return
+                
+            fits_files.sort(key=self._get_fits_timestamp)
+            
+            self.log("Erstelle Start- und End-Vorschau aus FITS... Bitte kurz warten.")
+            self.update_idletasks()
+            
+            first_preview = self._generate_fits_preview(fits_files[0])
+            last_preview = self._generate_fits_preview(fits_files[-1])
+            
+            if first_preview and last_preview:
+                TrackerToolWindow(self, first_preview, last_preview, self.save_tracker_coords)
+            else:
+                messagebox.showerror("Fehler", "Konnte Vorschau nicht generieren.")
         else:
-            frames_dir = os.path.join(out_dir, "timelapse_frames")
+            frames_dir = filedialog.askdirectory(title="Ordner mit Bildern (JPG/PNG) wählen")
+            if not frames_dir: return
+            
+            valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
+            images = []
+            for ext_pattern in valid_exts:
+                images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
+                images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
 
-        valid_exts = ('*.jpg', '*.jpeg', '*.png', '*.tif', '*.tiff')
-        images = []
-        for ext_pattern in valid_exts:
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern)))
-            images.extend(glob.glob(os.path.join(frames_dir, ext_pattern.upper())))
+            images = sorted(list(set(images)))
+            if not images:
+                messagebox.showerror("Fehler", "Keine Bilder gefunden.")
+                return
 
-        images = sorted(list(set(images)))
-        if not images:
-            messagebox.showerror("Fehler", "Keine Bilder gefunden. Bitte zuerst Bilder erzeugen lassen!")
-            return
-
-        first_image = images[0]
-        last_image = images[-1] 
-        TrackerToolWindow(self, first_image, last_image, self.save_tracker_coords)
+            self.last_custom_folder = frames_dir
+            TrackerToolWindow(self, images[0], images[-1], self.save_tracker_coords)
 
     def save_tracker_coords(self, start_coords, end_coords):
         self.asteroid_coordinates = (start_coords, end_coords)
         self.log(f"-> Asteroid markiert: Start {start_coords} -> Ende {end_coords}")
 
 
-    # --- TAB 1: TIMELAPSE ---
-    def _build_tab_timelapse(self, parent):
-        parent.grid_columnconfigure((0, 1), weight=1)
-        
-        # Links: Stacking
-        frame_stack = ctk.CTkFrame(parent)
-        frame_stack.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(frame_stack, text="Schritt 1: Short-Stacking", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkLabel(frame_stack, text="Reduziert Rauschen durch Stacking von x Bildern.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(0,10))
-        
-        b_frame = ctk.CTkFrame(frame_stack, fg_color="transparent")
-        b_frame.pack(pady=5)
-        ctk.CTkLabel(b_frame, text="Bilder pro Stack:").pack(side="left", padx=5)
-        ctk.CTkEntry(b_frame, textvariable=self.batch_size, width=60, justify="center").pack(side="left")
-        
-        self.btn_start_tl_stack = ctk.CTkButton(frame_stack, text="▶ Stacking starten (Farbe/Debayer)", fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Farbe (Debayer) für Timelapse"))
-        self.btn_start_tl_stack.pack(pady=15)
-
-        # Rechts: Video Export
-        frame_vid = ctk.CTkFrame(parent)
-        frame_vid.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(frame_vid, text="Schritt 2: Video Export", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkLabel(frame_vid, text="Erstellt ein Timelapse aus den fertigen Stacks.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(0,5))
-        
-        opt_frame = ctk.CTkFrame(frame_vid, fg_color="transparent")
-        opt_frame.pack()
-        
-        # Hinweis: Auf deinem Screenshot gab es noch Buttons für Crop/Asteroid. Die passen hierhin!
-        # ctk.CTkButton(opt_frame, text="Bildausschnitt / Asteroid").pack(side="left", padx=5)
-
-        self.export_format = ctk.StringVar(value="JPEG (Schnell & Klein)")
-        ctk.CTkOptionMenu(opt_frame, variable=self.export_format, values=["JPEG (Schnell & Klein)", "PNG (Verlustfrei & Groß)"], width=160).pack(pady=5)
-
-        self.chk_denoise = ctk.CTkCheckBox(frame_vid, text="KI Denoise (SetiAstro)", variable=self.use_denoise, command=self._toggle_denoise_lite)
-        self.chk_denoise.pack(pady=2)
-        self.chk_lite = ctk.CTkCheckBox(frame_vid, text="Denoise Lite Mode", variable=self.use_denoise_lite, state="disabled")
-        self.chk_lite.pack(pady=2)
-
-        self.btn_timelapse = ctk.CTkButton(frame_vid, text="🎞️ Timelapse rendern", fg_color="#b87333", hover_color="#8c5827", command=lambda: self._trigger_timelapse("Quelle: FITS Stacks"))
-        self.btn_timelapse.pack(pady=10)
-
-    # --- TAB 2: SCIENCE ---
-    def _build_tab_science(self, parent):
-        parent.grid_columnconfigure((0, 1), weight=1)
-        
-        # Links: Globale Registrierung
-        frame_reg = ctk.CTkFrame(parent)
-        frame_reg.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(frame_reg, text="Option A: Globale Registrierung", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkLabel(frame_reg, text="Richtet ALLE Bilder des Input-Ordners an einem\neinzigen Referenzbild aus. Perfekt für globale Auswertung.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,15))
-        
-        btn_reg = ctk.CTkButton(frame_reg, text="▶ Nur Registrieren starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur registrieren (Für Photometrie / Global)"))
-        btn_reg.pack(pady=15)
-
-        # Rechts: Grünkanal Stacking
-        frame_green = ctk.CTkFrame(parent)
-        frame_green.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(frame_green, text="Option B: Grünkanal Short-Stacking", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkLabel(frame_green, text="Extrahiert nur den G-Kanal und stackt in Batches.\nIdeal für rauschärmere Photometrie-Daten.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,10))
-        
-        g_frame = ctk.CTkFrame(frame_green, fg_color="transparent")
-        g_frame.pack(pady=5)
-        ctk.CTkLabel(g_frame, text="Bilder pro Stack:").pack(side="left", padx=5)
-        ctk.CTkEntry(g_frame, textvariable=self.batch_size, width=60, justify="center").pack(side="left")
-
-        btn_green = ctk.CTkButton(frame_green, text="▶ Grünkanal-Stacking starten", fg_color="#2b7b4a", hover_color="#1e5c36", command=lambda: self._trigger_stacking("Nur Grünkanal (Photometrie)"))
-        btn_green.pack(pady=10)
-
-    # --- TAB 3: TOOLS ---
-    def _build_tab_tools(self, parent):
-        parent.grid_columnconfigure((0, 1), weight=1)
-        
-        # Links: Direct Convert
-        frame_conv = ctk.CTkFrame(parent)
-        frame_conv.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(frame_conv, text="FITS direkt zu JPG/PNG/TIF", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkLabel(frame_conv, text="Kein Stacking. Wandelt alle Input-FITS\ndirekt in gestretchte Bilder um.", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,10))
-        
-        # NEU: Das Dropdown-Menü für das Format
-        ctk.CTkOptionMenu(
-            frame_conv, 
-            variable=self.export_format, 
-            values=["JPEG (Schnell & Klein)", "PNG (Verlustfrei & Groß)", "TIFF (16-bit unkomprimiert)"], 
-            width=200
-        ).pack(pady=(0, 10))
-        
-        btn_conv = ctk.CTkButton(frame_conv, text="▶ Konvertierung starten", fg_color="#2b6b8a", hover_color="#1a4c66", command=lambda: self._trigger_stacking("➡️ Nur Konvertieren (Input direkt zu JPG/PNG)"))
-        btn_conv.pack(pady=5)
-
-        # Rechts: External Video
-        frame_ext = ctk.CTkFrame(parent)
-        frame_ext.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
-        ctk.CTkLabel(frame_ext, text="Video aus fremdem Ordner", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkLabel(frame_ext, text="Erstellt eine MP4-Datei aus einem Ordner\nvoller JPGs/PNGs/TIFs (z.B. aus StarStax).", text_color="gray", font=ctk.CTkFont(size=11)).pack(pady=(5,25)) # Etwas mehr Padding wegen dem Dropdown auf der linken Seite
-        
-        btn_ext = ctk.CTkButton(frame_ext, text="🎞️ Ordner wählen & Video rendern", fg_color="#b87333", hover_color="#8c5827", command=lambda: self._trigger_timelapse("Quelle: Beliebiger Ordner (StarStax etc.)"))
-        btn_ext.pack(pady=15)
-
-    # --- HILFSMETHODEN ZUR BRÜCKENBILDUNG ---
+    # --- BRÜCKEN-METHODEN ---
     def _trigger_stacking(self, mode_string):
-        """Setzt die versteckte Variable und startet den alten Prozess"""
         self.stack_mode.set(mode_string)
         self.start_stacking_thread()
-        
-    def _trigger_timelapse(self, source_string):
-        """Setzt die Video-Quelle und startet den Render-Prozess"""
-        # Da video_source im alten Code definiert wurde, stellen wir sicher, dass sie existiert
-        if not hasattr(self, 'video_source'):
-            self.video_source = ctk.StringVar()
-        self.video_source.set(source_string)
-        self.start_timelapse_thread()
 
-    # --- HILFSMETHODEN FÜR GUI ---
     def _toggle_denoise_lite(self):
-        """Aktiviert oder deaktiviert die Lite-Checkbox basierend auf dem Haupt-Haken."""
         if self.use_denoise.get():
             self.chk_lite.configure(state="normal")
         else:
@@ -893,7 +747,6 @@ class ShortStackerApp(ctk.CTk):
         self.save_settings()
         self.settings_window.destroy()
 
-    # --- GUI INTERAKTIONEN ---
     def select_input(self):
         folder = filedialog.askdirectory(title="Input Ordner wählen")
         if folder: 
@@ -922,20 +775,15 @@ class ShortStackerApp(ctk.CTk):
         self.log("\n[!] Abbruch angefordert... Bitte warten, bis Siril den aktuellen Batch beendet hat.")
 
     def _get_fits_timestamp(self, filepath):
-        """Liest schnell und ohne Zusatzbibliotheken den DATE-OBS Header aus einer FITS-Datei."""
         try:
             with open(filepath, 'rb') as f:
-                # FITS-Header sind in 2880-Byte-Blöcken organisiert. 4 Blöcke reichen völlig, um DATE-OBS zu finden.
                 header_data = f.read(2880 * 4).decode('ascii', errors='ignore')
                 for i in range(0, len(header_data), 80):
                     card = header_data[i:i+80]
                     if card.startswith('DATE-OBS'):
-                        # Extrahiert den reinen Zeitstempel, z.B. '2026-06-25T23:15:30.123'
                         return card.split('=')[1].split('/')[0].strip(" '")
         except Exception:
             pass
-        
-        # Fallback: Sollte kein DATE-OBS gefunden werden, nutze das letzte Änderungsdatum der Datei
         return os.path.getmtime(filepath)
     
     # --- STACKING LOGIK ---
@@ -957,7 +805,6 @@ class ShortStackerApp(ctk.CTk):
             messagebox.showerror("Fehler", "Bitte eine gültige Zahl für die Batch-Größe eingeben!")
             return
 
-        # NEU: Schaltet alle Start-Buttons in der GUI ab, damit man nicht doppelt klickt
         if hasattr(self, 'btn_stack_color'): self.btn_stack_color.configure(state="disabled")
         if hasattr(self, 'btn_stack_green'): self.btn_stack_green.configure(state="disabled")
         if hasattr(self, 'btn_stack_reg'): self.btn_stack_reg.configure(state="disabled")
@@ -978,12 +825,8 @@ class ShortStackerApp(ctk.CTk):
 
     def run_stacker_process(self, in_dir, out_dir, siril_exe, batch_size, modus_text):
         try:
-            search1 = os.path.join(in_dir, "*.fit")
-            search2 = os.path.join(in_dir, "*.fits")
-            # 1. Unsortierte Liste aller FITS holen
-            dateien = glob.glob(search1) + glob.glob(search2)
+            dateien = self._find_fits_files(in_dir)
             
-            # 2. NEU: Chronologisch nach dem echten Aufnahmezeitpunkt (FITS-Header) sortieren!
             dateien.sort(key=self._get_fits_timestamp)
             
             total_files = len(dateien)
@@ -996,16 +839,15 @@ class ShortStackerApp(ctk.CTk):
             temp_dir = os.path.join(in_dir, "siril_temp_workdir")
             script_path = os.path.join(in_dir, "temp_script.ssf")
 
-            # --- ZUERST DIE VARIABLEN DEFINIEREN ---
             is_direct_export = "Nur Konvertieren" in modus_text
-            is_photometry_reg = "Nur registrieren (Für Photometrie / Global)" in modus_text 
+            is_photometry_reg = "Nur registrieren" in modus_text 
+            is_color_reg = "Farbe" in modus_text # <--- NEU: Prüft ob der Farb-Button geklickt wurde
             
             export_ext = ""
             export_cmd = ""
             frames_dir_siril = ""
             global_frame_idx = 1 
 
-            # --- DANN ERST DIE ABFRAGEN ---
             if is_direct_export:
                 format_choice = self.export_format.get()
                 if "PNG" in format_choice:
@@ -1023,18 +865,15 @@ class ShortStackerApp(ctk.CTk):
                     os.makedirs(frames_dir)
                 frames_dir_siril = frames_dir.replace('\\', '/')
             
-            # --- NEUER VORGANG: Globale Photometrie-Registrierung ---
             if is_photometry_reg:
                 self.log("\nStarte globale Registrierung für Photometrie...")
                 self.log("Batch-Größe wird ignoriert. Verarbeite alle Bilder in einem Durchgang.")
 
-                # Temp-Ordner im Output erstellen
                 temp_reg_dir = os.path.join(out_dir, "temp_photometry_reg")
                 if os.path.exists(temp_reg_dir):
                     shutil.rmtree(temp_reg_dir, ignore_errors=True)
                 os.makedirs(temp_reg_dir)
 
-                # 1. Alle Bilder in den Temp-Ordner kopieren
                 self.log("Kopiere Dateien in den Arbeitsordner...")
                 for idx, datei in enumerate(dateien):
                     if self.stop_requested: return
@@ -1045,17 +884,21 @@ class ShortStackerApp(ctk.CTk):
                 temp_dir_siril = temp_reg_dir.replace('\\', '/')
                 script_path = os.path.join(temp_reg_dir, "reg_script.ssf")
 
-                # 2. Siril Skript: Konvertieren -> setref 1 -> Global registrieren
                 siril_script_content = f"requires 1.2.0\nsetext fit\ncd \"{temp_dir_siril}\"\n"
-                siril_script_content += "convert light\n"
-                siril_script_content += "setref light 1\n"  # <--- DER MAGISCHE BEFEHL
+                
+                # NEU: Wenn Farbe gewählt wurde, wird hier debayered!
+                if is_color_reg:
+                    siril_script_content += "convert light -debayer\n"
+                else:
+                    siril_script_content += "convert light\n"
+                    
+                siril_script_content += "setref light 1\n"
                 siril_script_content += "register light\n"
                 siril_script_content += "close\n"
 
                 with open(script_path, "w") as f:
                     f.write(siril_script_content)
 
-                # 3. Siril ausführen
                 self.log("Siril registriert global (ohne Farb/Grünkanal Extraktion)... Bitte warten.")
                 self.after(0, self.update_progress, 0.5) 
                 try:
@@ -1064,7 +907,6 @@ class ShortStackerApp(ctk.CTk):
                     self.log("FEHLER: siril-cli.exe nicht gefunden.")
                     return
 
-                # 4. Dateien zurückschieben und umbenennen
                 if process.returncode == 0:
                     r_files = sorted(glob.glob(os.path.join(temp_reg_dir, "r_light_*.fit")))
                     for idx, r_file in enumerate(r_files):
@@ -1081,11 +923,9 @@ class ShortStackerApp(ctk.CTk):
                     for line in error_output.split('\n')[-10:]:
                         if line: self.log(f"    Siril: {line}")
 
-                # 5. Aufräumen
                 shutil.rmtree(temp_reg_dir, ignore_errors=True)
                 self.after(0, self._reset_buttons)
                 return
-            # --------------------------------------------------------
 
             batch_nummer = 1
             erfolgreich = 0
@@ -1141,7 +981,6 @@ class ShortStackerApp(ctk.CTk):
                     if "Grün" in modus_text:
                         siril_script_content += "convert light\n"
                         siril_script_content += "seqextract_Green light\n"
-                        # Zwingt Siril, auch winzige (sigma) und unrunde (roundness) Sterne auf dem halbierten Bild zu erkennen
                         siril_script_content += "setfindstar -sigma=0.5 -roundness=0.0\n" 
                         siril_script_content += "register Green_light\n"
                         siril_script_content += "stack r_Green_light sum -nonorm -out=result\n"
@@ -1192,6 +1031,7 @@ class ShortStackerApp(ctk.CTk):
 
                 batch_nummer += 1
 
+            # --- AUFRÄUMEN NACH DEM STACKING ---
             if os.path.exists(temp_dir):
                 for _ in range(10):
                     try:
@@ -1203,6 +1043,45 @@ class ShortStackerApp(ctk.CTk):
             if os.path.exists(script_path): 
                 try: os.remove(script_path)
                 except PermissionError: pass
+
+            # =================================================================
+            # NEU: AUTOMATISCHE GLOBALE REGISTRIERUNG FÜR GRÜNKANAL-STACKS
+            # =================================================================
+            is_green_global = "Global Reg" in modus_text
+            
+            if is_green_global and not self.stop_requested and erfolgreich > 0:
+                self.log("\nStarte Phase 2: Globale Registrierung der fertigen Stacks...")
+                self.btn_stop.configure(state="disabled") # Stoppen jetzt verhindern, da es schnell geht
+                
+                script_path_global = os.path.join(out_dir, "global_reg.ssf")
+                out_dir_siril = out_dir.replace('\\', '/')
+                
+                # Wir weisen Siril an, die frisch erzeugte Sequenz "shortstack" zu laden und global auszurichten
+                with open(script_path_global, "w", encoding="utf-8") as f:
+                    f.write("requires 1.2.0\n")
+                    f.write(f'cd "{out_dir_siril}"\n')
+                    f.write("setext fit\n")
+                    f.write("setref shortstack 1\n") 
+                    f.write("register shortstack\n")
+                    f.write("close\n")
+                    
+                self.log("Siril richtet die Stacks aneinander aus. Bitte warten...")
+                process = subprocess.run([siril_exe, "-s", script_path_global], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                
+                if process.returncode == 0:
+                    self.log("-> Globale Ausrichtung erfolgreich!")
+                    # Aufräumen: Die wackeligen Zwischen-Stacks löschen, damit nur die r_shortstacks übrig bleiben
+                    unaligned = glob.glob(os.path.join(out_dir, "shortstack_*.fit"))
+                    for f in unaligned:
+                        try: os.remove(f)
+                        except Exception: pass
+                else:
+                    self.log("-> FEHLER bei der finalen Registrierung! (Sind genug Sterne sichtbar?)")
+                    
+                if os.path.exists(script_path_global):
+                    try: os.remove(script_path_global)
+                    except Exception: pass
+            # =================================================================
 
             self.after(0, self.update_progress, 1.0)
             
@@ -1222,7 +1101,6 @@ class ShortStackerApp(ctk.CTk):
     def _reset_buttons(self):
         self.btn_stop.configure(state="disabled", text="⏹ Stop / Abbruch")
         
-        # NEU: Schaltet die Buttons nach Abschluss wieder ein
         if hasattr(self, 'btn_stack_color'): self.btn_stack_color.configure(state="normal")
         if hasattr(self, 'btn_stack_green'): self.btn_stack_green.configure(state="normal")
         if hasattr(self, 'btn_stack_reg'): self.btn_stack_reg.configure(state="normal")
@@ -1230,74 +1108,61 @@ class ShortStackerApp(ctk.CTk):
         
     # --- TIMELAPSE LOGIK ---
     def start_timelapse_thread(self):
-        source_choice = self.video_source.get()
-        is_custom = "Beliebiger Ordner" in source_choice
-        out_dir = self.output_folder.get()
-        
-        if not is_custom and not out_dir:
-            messagebox.showerror("Fehler", "Bitte den Output-Ordner auswählen!")
-            return
-            
-        custom_folder = ""
-        if is_custom:
-            # NEU: Prüfen, ob wir im Crop-Tool gerade schon einen Ordner gewählt haben
-            if hasattr(self, 'last_custom_folder') and self.last_custom_folder and (self.crop_coordinates or self.asteroid_coordinates):
-                custom_folder = self.last_custom_folder
-            else:
-                custom_folder = filedialog.askdirectory(title="Beliebigen Ordner mit JPG/PNG/TIF Bildern wählen")
-                if not custom_folder:
-                    return
-            
         self.btn_timelapse.configure(state="disabled", text="Arbeite...")
         self.progress_bar.set(0.0)
         self.log_box.delete("0.0", "end")
         self.log("=== Flexibler Timelapse-Export gestartet ===")
         
-        t = threading.Thread(target=self.run_timelapse_process, args=(out_dir, custom_folder))
+        t = threading.Thread(target=self.run_timelapse_process)
         t.daemon = True
         t.start()
 
-    def run_timelapse_process(self, out_dir, custom_folder):
+    def run_timelapse_process(self):
         try:
             siril_exe = self.siril_path.get()
             ffmpeg_exe = self.ffmpeg_path.get()
             seti_exe = self.setiastro_path.get() 
             
             source_choice = self.video_source.get()
-            is_unstacked = "Einzelbilder" in source_choice
-            is_custom = "Beliebiger" in source_choice
+            is_fits_source = "FITS" in source_choice
             
-            format_choice = self.export_format.get()
-            if "PNG" in format_choice:
-                ext = "png"
-                save_cmd = "savepng"
-            elif "TIFF" in format_choice:
-                ext = "tif"
-                save_cmd = "savetif"
-            else:
-                ext = "jpg"
-                save_cmd = "savejpg"
-
-            # --- 1. ORDNER WEICHE ---
-            if is_custom:
-                frames_dir = custom_folder
-                out_dir = custom_folder 
-            elif is_unstacked:
-                frames_dir = os.path.join(out_dir, "timelapse_unstacked_frames")
-            else:
+            # --- 1. QUELL- UND ZIELORDNER BESTIMMEN ---
+            if is_fits_source:
+                if "Input" in source_choice:
+                    src_dir = self.input_folder.get()
+                    out_dir = self.output_folder.get()
+                else:
+                    src_dir = self.output_folder.get()
+                    out_dir = self.output_folder.get()
+                    
+                if not src_dir or not out_dir:
+                    self.log("FEHLER: Bitte wähle die entsprechenden Input/Output Ordner!")
+                    return
                 frames_dir = os.path.join(out_dir, "timelapse_frames")
+            else:
+                custom_folder = filedialog.askdirectory(title="Beliebigen Ordner mit JPG/PNG/TIF Bildern wählen")
+                if not custom_folder: return
+                src_dir = custom_folder
+                out_dir = custom_folder
+                frames_dir = custom_folder
+
+            format_choice = self.export_format.get()
+            if "PNG" in format_choice: ext = "png"; save_cmd = "savepng"
+            elif "TIFF" in format_choice: ext = "tif"; save_cmd = "savetif"
+            else: ext = "jpg"; save_cmd = "savejpg"
+
+            # --- 2. SIRIL STRETCH (FÜR ALLE FITS) ---
+            if is_fits_source:
+                # Nimm einfach ALLE FITS aus dem Ordner, egal wie sie heißen!
+                dateien = self._find_fits_files(src_dir)
+                dateien.sort(key=self._get_fits_timestamp) # Chronologisch sortieren
                 
-            # --- 2. SIRIL STRETCH (NUR FÜR FITS STACKS) ---
-            if not is_custom and not is_unstacked:
-                search_pattern = os.path.join(out_dir, "shortstack_*.fit")
-                dateien = sorted(glob.glob(search_pattern))
                 total_fits = len(dateien)
-                
                 if total_fits == 0:
-                    self.log("FEHLER: Keine 'shortstack_*.fit' Dateien im Ordner gefunden!")
+                    self.log(f"FEHLER: Keine FITS im Ordner gefunden:\n{src_dir}")
                     return
                     
-                self.log(f"[{total_fits}] fertige Stacks für Timelapse gefunden.")
+                self.log(f"[{total_fits}] FITS-Dateien zur Videokonvertierung gefunden.")
                 if not os.path.exists(frames_dir):
                     os.makedirs(frames_dir)
                     
@@ -1305,36 +1170,61 @@ class ShortStackerApp(ctk.CTk):
                 frames_dir_siril = frames_dir.replace('\\', '/')
                 
                 self.log(f"Generiere Siril-Skript für {ext.upper()}-Export...")
-                with open(script_path, "w") as f:
+                with open(script_path, "w", encoding="utf-8") as f:
                     f.write("requires 1.2.0\n")
-                    f.write(f'cd "{out_dir.replace("\\", "/")}"\n')
+                    f.write(f'cd "{src_dir.replace(chr(92), "/")}"\n')
                     for idx, datei in enumerate(dateien):
                         filename = os.path.basename(datei)
-                        f.write(f'load "{filename}"\nrmgreen\nautostretch\nmirrorx\n')
+                        f.write(f'load "{filename}"\n')
+                        # NEU: rmgreen flexibel wieder da!
+                        if self.use_rmgreen.get():
+                            f.write("rmgreen\n")
+                        f.write("autostretch\n")
                         f.write(f'{save_cmd} "{frames_dir_siril}/frame_{idx+1:04d}"\n')
-                    f.write("close\n")
                     
-                self.log("Siril wendet Autostretch an. Bitte warten...")
+                self.log("Siril konvertiert und wendet Autostretch an. Bitte warten...")
                 try:
-                    process = subprocess.Popen([siril_exe, "-s", script_path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+                    process = subprocess.Popen(
+                        [siril_exe, "-s", script_path], 
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                        text=True, encoding="utf-8", errors="replace",
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                    )
+                    
                     frames_done = 0
+                    last_log_lines = [] # Speichert die letzten Ausgaben für die Fehlersuche
+                    
                     for line in iter(process.stdout.readline, ''):
                         if not line: break
-                        if "Saving" in line or "saving" in line.lower():
+                        
+                        clean_line = line.strip()
+                        if clean_line:
+                            last_log_lines.append(clean_line)
+                            if len(last_log_lines) > 10:
+                                last_log_lines.pop(0) # Nur die letzten 10 Zeilen merken
+                                
+                        if "saving" in clean_line.lower() or "saved" in clean_line.lower():
                             frames_done += 1
                             self.after(0, self.update_progress, min((frames_done / total_fits) * 0.8, 0.8))
+                            
                     process.wait()
                     
                     if process.returncode == 0:
-                        self.log(f"-> Alle Stacks erfolgreich als {ext.upper()} exportiert!")
+                        self.log(f"-> Alle {total_fits} Bilder erfolgreich als {ext.upper()} exportiert!")
                     else:
                         self.log("-> FEHLER beim Exportieren in Siril!")
+                        self.log("Letzte Meldungen von Siril:")
+                        for err_line in last_log_lines:
+                            self.log(f"   {err_line}")
                         return
+                        
                 except FileNotFoundError:
                     self.log("FEHLER: siril-cli.exe nicht gefunden. Pfad in den Einstellungen prüfen!")
                     return
                 finally:
-                    if os.path.exists(script_path): os.remove(script_path)
+                    if os.path.exists(script_path): 
+                        try: os.remove(script_path)
+                        except Exception: pass
             else:
                 self.log("Quelle sind bereits fertige Bilder. Überspringe Siril...")
                 self.after(0, self.update_progress, 0.8)
@@ -1413,11 +1303,8 @@ class ShortStackerApp(ctk.CTk):
                 
                 img = cv2.imread(file_path)
                 
-                # --- 1. BESCHNITT (CROP) ANWENDEN ---
                 if self.crop_coordinates:
                     x1, y1, x2, y2 = self.crop_coordinates
-                    
-                    # Zwingend für FFmpeg: Gerade Zahlen!
                     w = x2 - x1
                     h = y2 - y1
                     if w % 2 != 0: x2 -= 1
@@ -1425,42 +1312,29 @@ class ShortStackerApp(ctk.CTk):
                     
                     img_cropped = img[y1:y2, x1:x2]
                 else:
-                    img_cropped = img  # Fallback, wenn kein Beschnitt gewählt wurde
-                    x1, y1 = 0, 0      # Wichtig für die spätere Pfeil-Berechnung
+                    img_cropped = img  
+                    x1, y1 = 0, 0      
 
-                # --- 2. ASTEROIDEN-MARKIERUNG ZEICHNEN ---
                 if hasattr(self, 'asteroid_coordinates') and self.asteroid_coordinates:
                     (start_x_orig, start_y_orig), (end_x_orig, end_y_orig) = self.asteroid_coordinates
                     
-                    # Wir verschieben die geklickten Koordinaten um den Crop-Rahmen
                     ast_x_start = start_x_orig - x1
                     ast_y_start = start_y_orig - y1
                     ast_x_end = end_x_orig - x1
                     ast_y_end = end_y_orig - y1
                     
                     if N_frames > 1:
-                        # Position für den aktuellen Frame linear interpolieren
                         cur_x = int(ast_x_start + (idx / (N_frames - 1)) * (ast_x_end - ast_x_start))
                         cur_y = int(ast_y_start + (idx / (N_frames - 1)) * (ast_y_end - ast_y_start))
                         
-                        # --- DEZENTERE PFEIL-GEOMETRIE ---
-                        # Der Pfeil beginnt nur noch 35 Pixel entfernt (statt 60)
                         arrow_start = (cur_x - 40, cur_y - 40)
-                        # ...und endet 10 Pixel vor dem Asteroiden
                         arrow_end = (cur_x - 6, cur_y - 6)
                         
-                        # Pfeil zeichnen:
-                        # (0, 0, 180) -> Ein etwas weicheres, dunkleres Rot (BGR-Format)
-                        # thickness=1 -> Feine, 1 Pixel dünne Linie
-                        # tipLength=0.15 -> Deutlich kleinere Pfeilspitze
                         cv2.arrowedLine(img_cropped, arrow_start, arrow_end, (0, 0, 200), 2, cv2.LINE_AA, 0, 0.25)
 
-                # --- 3. BILD SPEICHERN ODER VERLINKEN ---
-                # Wenn wir gecroppt ODER gemalt haben, MUSS ein neues Bild geschrieben werden
                 if self.crop_coordinates or (hasattr(self, 'asteroid_coordinates') and self.asteroid_coordinates):
                     cv2.imwrite(dst, img_cropped)
                 else:
-                    # Wenn weder gecroppt noch markiert wurde, greift der schnelle Hardlink
                     try:
                         os.link(file_path, dst) 
                     except OSError:
@@ -1468,7 +1342,7 @@ class ShortStackerApp(ctk.CTk):
                     
             # --- 4. FFMPEG RENDERING ---
             self.log("Versuche Video mit FFmpeg zu rendern...")
-            video_out = os.path.join(out_dir, "timelapse_v1.6.mp4")
+            video_out = os.path.join(out_dir, "timelapse_v1.7.mp4")
             
             ffmpeg_cmd = [
                 ffmpeg_exe, "-y", "-framerate", "24", 
