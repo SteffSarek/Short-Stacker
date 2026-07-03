@@ -340,7 +340,7 @@ class ShortStackerApp(ctk.CTk):
     def _build_gui(self):
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.grid(row=0, column=0, padx=20, pady=(10, 0), sticky="ew")
-        ctk.CTkLabel(top_frame, text="Astro Short-Stacker v1.7.0", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
+        ctk.CTkLabel(top_frame, text="Astro Short-Stacker v1.7.5", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
         ctk.CTkButton(top_frame, text="⚙️ Einstellungen", width=120, fg_color="#454545", hover_color="#2b2b2b", command=self.open_settings).pack(side="right")
 
         frame_paths = ctk.CTkFrame(self)
