@@ -291,8 +291,9 @@ class ShortStackerApp(ctk.CTk):
         self.use_rmgreen = ctk.BooleanVar(value=True) # Standardmäßig an
         
         # NEU: Asteroiden-Markierung Einstellungen
-        self.marker_style = ctk.StringVar(value="Pfeil")
+        self.marker_style = ctk.StringVar(value="Fadenkreuz") # Startwert Fadenkreuz
         self.marker_size = ctk.IntVar(value=40)
+        self.marker_gap = ctk.IntVar(value=15) # <--- NEU: Abstand zum Objekt
         
         self.load_settings()
 
@@ -496,11 +497,19 @@ class ShortStackerApp(ctk.CTk):
         ctk.CTkButton(btn_fx, text="✂️ Bildausschnitt", width=100, command=self.open_crop_tool).pack(side="left", padx=2)
         ctk.CTkButton(btn_fx, text="☄️ Asteroid markieren", width=120, command=self.open_tracker_tool).pack(side="left", padx=2)
         
-        # NEU: Markierungs-Einstellungen (Dropdown + Slider)
-        marker_frame = ctk.CTkFrame(frame_fx, fg_color="transparent")
-        marker_frame.pack(pady=(0, 10))
-        ctk.CTkOptionMenu(marker_frame, variable=self.marker_style, values=["Pfeil", "Kreis", "Fadenkreuz"], width=100).pack(side="left", padx=2)
-        ctk.CTkSlider(marker_frame, variable=self.marker_size, from_=15, to=150, width=120).pack(side="left", padx=2)
+        # NEU: Markierungs-Einstellungen (Dropdown + 2 Sliders)
+        marker_frame1 = ctk.CTkFrame(frame_fx, fg_color="transparent")
+        marker_frame1.pack(pady=(0, 2))
+        ctk.CTkOptionMenu(marker_frame1, variable=self.marker_style, values=["Pfeil", "Kreis", "Fadenkreuz"], width=140).pack()
+        
+        marker_frame2 = ctk.CTkFrame(frame_fx, fg_color="transparent")
+        marker_frame2.pack(pady=(0, 10))
+        
+        ctk.CTkLabel(marker_frame2, text="Größe:").pack(side="left")
+        ctk.CTkSlider(marker_frame2, variable=self.marker_size, from_=5, to=120, width=70).pack(side="left", padx=5)
+        
+        ctk.CTkLabel(marker_frame2, text="Abstand:").pack(side="left")
+        ctk.CTkSlider(marker_frame2, variable=self.marker_gap, from_=0, to=60, width=70).pack(side="left", padx=5)
         
         self.chk_denoise = ctk.CTkCheckBox(frame_fx, text="KI Denoise (SetiAstro)", variable=self.use_denoise, command=self._toggle_denoise_lite)
         self.chk_denoise.pack(pady=(5, 2))
@@ -1340,23 +1349,24 @@ class ShortStackerApp(ctk.CTk):
                     # Variablen aus der GUI holen
                     m_style = self.marker_style.get()
                     m_size = int(self.marker_size.get())
+                    gap = int(self.marker_gap.get()) # <--- NEUER ABSTANDS-SLIDER
                     m_color = (0, 0, 200) # Rot in BGR
                     m_thick = 2
                     
                     if m_style == "Pfeil":
-                        gap = 8 # Abstand der Pfeilspitze zum Objekt
-                        if m_size <= gap: m_size = gap + 10 # Verhindert Fehler, wenn Regler zu klein
+                        # Falls der Pfeil kürzer ist als der Abstand, korrigieren, sonst malt er rückwärts
+                        if m_size <= gap: m_size = gap + 15 
                         arrow_start = (cur_x - m_size, cur_y - m_size)
                         arrow_end = (cur_x - gap, cur_y - gap)
                         cv2.arrowedLine(img_cropped, arrow_start, arrow_end, m_color, m_thick, cv2.LINE_AA, 0, 0.2)
                         
                     elif m_style == "Kreis":
-                        # Zieht einen sauberen Kreis
-                        cv2.circle(img_cropped, (cur_x, cur_y), m_size, m_color, m_thick, cv2.LINE_AA)
+                        # Beim Kreis nutzen wir den "Abstand" als Radius um den Stern
+                        radius = gap if gap > 2 else 15
+                        cv2.circle(img_cropped, (cur_x, cur_y), radius, m_color, m_thick, cv2.LINE_AA)
                         
                     elif m_style == "Fadenkreuz":
-                        # Zeichnet 4 Linien mit Lücke in der Mitte, damit der Asteroid sichtbar bleibt
-                        gap = 8 
+                        # Zeichnet 4 Linien. "gap" definiert die leere Box in der Mitte. "m_size" die Länge der Striche.
                         # Oben
                         cv2.line(img_cropped, (cur_x, cur_y - gap), (cur_x, cur_y - gap - m_size), m_color, m_thick, cv2.LINE_AA)
                         # Unten
